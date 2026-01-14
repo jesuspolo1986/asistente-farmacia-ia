@@ -5,12 +5,9 @@ from flask import Flask, jsonify, render_template, request
 from groq import Groq
 
 app = Flask(__name__)
-
-# Configuración de Groq
 api_key_groq = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=api_key_groq)
 
-# Variable global (La reforzaremos con una validación de seguridad)
 df_inv = None
 
 @app.route('/')
@@ -22,74 +19,54 @@ def upload_file():
     global df_inv
     try:
         file = request.files.get('file')
-        if not file:
-            return jsonify({"error": "No hay archivo"}), 400
+        if not file: return jsonify({"error": "No hay archivo"}), 400
         
-        # LEER COMO EN AI PRO: Usando BytesIO para evitar errores de disco
         stream = io.BytesIO(file.read())
+        # Leemos ignorando espacios en los nombres de columnas
+        df_inv = pd.read_csv(stream, skipinitialspace=True)
+        df_inv.columns = [str(c).strip().lower() for c in df_inv.columns]
         
-        if file.filename.endswith('.csv'):
-            df_inv = pd.read_csv(stream)
-        else:
-            df_inv = pd.read_excel(stream, engine='openpyxl')
-
-        # LIMPIEZA NIVEL PRO:
-        # 1. Quitamos espacios en blanco de los nombres de columnas
-        df_inv.columns = [str(c).strip() for c in df_inv.columns]
-        # 2. Convertimos todo el contenido a string para que la búsqueda no falle con números
-        df_inv = df_inv.astype(str)
-        
-        print(f"Columnas cargadas: {list(df_inv.columns)}") # Ver esto en los logs de Render
-        
-        return jsonify({
-            "status": "Exitoso", 
-            "filas": len(df_inv),
-            "columnas": list(df_inv.columns)
-        })
+        return jsonify({"status": "Exitoso", "columnas": list(df_inv.columns)})
     except Exception as e:
-        return jsonify({"error": f"Error técnico: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/preguntar/<nombre>', methods=['GET'])
 def preguntar_por_voz(nombre):
     global df_inv
-    # Si la variable se borró por reinicio del servidor, avisamos
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "El servidor se reinició. Por favor, sube el archivo de nuevo."})
+        return jsonify({"respuesta_asistente": "Sube el archivo primero."})
     
     try:
-        termino = str(nombre).lower().strip()
+        # LIMPIEZA AGRESIVA: Quitamos puntos, comas y espacios (ej: "Ventas." -> "ventas")
+        termino = "".join(filter(str.isalnum, nombre)).lower().strip()
         
-        # BÚSQUEDA UNIVERSAL DE AI PRO:
-        # Buscamos en todas las celdas sin importar la columna
-        mascara = df_inv.apply(lambda row: row.str.lower().str.contains(termino)).any(axis=1)
-        resultado = df_inv[mascara]
+        # Búsqueda en todo el DataFrame (Universal)
+        # Convertimos todo a minúsculas para comparar
+        mask = df_inv.apply(lambda row: row.astype(str).str.lower().str.contains(termino)).any(axis=1)
+        resultado = df_inv[mask]
         
         if not resultado.empty:
-            # Convertimos la primera fila a un formato que Elena entienda
-            fila_datos = resultado.iloc[0].to_dict()
-            contexto = f"Datos del producto: {fila_datos}"
+            # Si hay resultados, tomamos los datos de la primera fila
+            datos = resultado.iloc[0].to_dict()
+            contexto = f"Datos encontrados: {datos}"
         else:
-            contexto = f"No encontré el producto {nombre}."
+            # Si no hay resultados (como pasó con 'Ventas'), Elena debe ser honesta
+            contexto = f"No encontré ningún producto o dato que coincida con '{nombre}'."
 
-        prompt_sistema = (
-            "Eres Elena. Responde por voz de forma muy breve. "
-            "Usa los datos proporcionados para decir el precio y el stock. "
-            "Si no hay datos claros, dilo con amabilidad."
-        )
-
+        # Prompt para Elena
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
-                {"role": "system", "content": prompt_sistema},
-                {"role": "user", "content": f"Contexto: {contexto}. Pregunta: {nombre}"}
+                {"role": "system", "content": "Eres Elena. Responde por voz de forma breve. Si no encuentras el producto, dile al usuario qué productos sí tienes disponibles brevemente."},
+                {"role": "user", "content": f"Contexto: {contexto}. Pregunta: {nombre}. Inventario actual: {df_inv.head(5).to_dict()}"}
             ],
         )
         return jsonify({"respuesta_asistente": completion.choices[0].message.content})
     
     except Exception as e:
-        print(f"Error en búsqueda: {e}")
-        return jsonify({"respuesta_asistente": "Tuve un problema al leer la fila. Intenta decir solo el nombre."})
+        print(f"Error: {e}")
+        return jsonify({"respuesta_asistente": "Tuve un problema al leer el archivo."})
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000)) # Ajustado al port 10000 de tus logs
     app.run(host='0.0.0.0', port=port)
