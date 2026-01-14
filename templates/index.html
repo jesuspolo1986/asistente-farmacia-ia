@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elena - AI Pro Analyst</title>
+    <title>Elena - Asistente Farmacia AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -11,6 +11,9 @@
         .gradient-bg { background: linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%); }
         .pulse-mic { animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); } 70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); } }
+        /* Animación para la burbuja de texto */
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="gradient-bg min-h-screen text-gray-800 font-sans">
@@ -23,18 +26,18 @@
         <div class="max-w-md mx-auto">
             
             <div class="text-center mb-8">
-                <h1 class="text-3xl font-bold text-white tracking-tight">AI Pro Analyst</h1>
-                <p class="text-indigo-200 uppercase text-xs tracking-widest font-semibold mt-1">Elena Voice Systems</p>
+                <h1 class="text-3xl font-bold text-white tracking-tight">Farmacia AI</h1>
+                <p class="text-indigo-200 uppercase text-xs tracking-widest font-semibold mt-1">Sistema Elena v2.0</p>
             </div>
 
             <div id="upload-panel" class="glass rounded-3xl p-6 shadow-2xl mb-6 border border-white/20">
-                <h2 class="text-lg font-bold mb-4 flex items-center">
-                    <i class="fas fa-file-csv text-indigo-600 mr-2"></i> Base de Datos
+                <h2 class="text-lg font-bold mb-4 flex items-center text-indigo-900">
+                    <i class="fas fa-database mr-2"></i> Inventario
                 </h2>
                 <div class="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center hover:bg-indigo-50 transition-all cursor-pointer" onclick="document.getElementById('fileInput').click()">
                     <i class="fas fa-cloud-upload-alt text-3xl text-indigo-400 mb-2"></i>
-                    <p class="text-sm text-gray-500">Sube el inventario (Excel/CSV)</p>
-                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .csv" onchange="subirArchivo()">
+                    <p class="text-sm text-gray-500">Sube tu Excel o CSV aquí</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="subirArchivo()">
                 </div>
                 <div id="status-carga" class="mt-4 text-center text-xs font-bold text-gray-400 uppercase tracking-tighter">
                     Sin datos cargados
@@ -44,19 +47,24 @@
             <div class="glass rounded-3xl p-8 shadow-2xl border border-white/20 text-center relative overflow-hidden">
                 <div id="elena-status" class="text-xs font-bold text-indigo-500 mb-6 uppercase tracking-widest">Lista para ayudar</div>
                 
-                <div class="flex justify-center mb-8">
+                <div class="flex justify-center mb-6">
                     <button id="mic-btn" onclick="activarEscucha()" class="w-32 h-32 bg-indigo-600 rounded-full flex items-center justify-center text-white text-4xl shadow-lg transition-all active:scale-95">
                         <i class="fas fa-microphone" id="mic-icon"></i>
                     </button>
                 </div>
 
-                <div id="transcripcion" class="text-sm italic text-gray-500 min-h-[40px] mb-4">
-                    "Toca el micrófono y pregunta..."
+                <div id="burbuja-respuesta" class="hidden fade-in bg-indigo-50 rounded-2xl p-4 mb-6 border-l-4 border-indigo-500 text-left">
+                    <p class="text-xs font-bold text-indigo-600 uppercase mb-1">Elena dice:</p>
+                    <p id="texto-respuesta" class="text-gray-700 text-sm leading-relaxed"></p>
                 </div>
 
-                <button class="w-full bg-gray-100 text-gray-500 py-3 rounded-2xl text-sm font-bold flex items-center justify-center space-x-2 hover:bg-gray-200 transition">
-                    <i class="fas fa-file-pdf"></i>
-                    <span>REPORTE ANALÍTICO (Mañana)</span>
+                <div id="transcripcion" class="text-sm italic text-gray-400 min-h-[40px] mb-4">
+                    "Toca el micrófono y pregunta por un precio..."
+                </div>
+
+                <button onclick="window.print()" class="w-full bg-gray-100 text-gray-500 py-3 rounded-2xl text-sm font-bold flex items-center justify-center space-x-2 hover:bg-gray-200 transition">
+                    <i class="fas fa-print"></i>
+                    <span>IMPRIMIR RESPUESTA</span>
                 </button>
             </div>
 
@@ -64,58 +72,45 @@
     </div>
 
     <script>
-        // --- MOTOR DE VOZ (TEXT TO SPEECH) ---
+        // --- MOTOR DE VOZ ---
         function elenaHabla(texto) {
             const synth = window.speechSynthesis;
             const utterThis = new SpeechSynthesisUtterance(texto);
             utterThis.lang = 'es-ES';
-            utterThis.pitch = 1.1; // Un poco más aguda para que suene como "Elena"
-            utterThis.rate = 1.0;
+            utterThis.pitch = 1.1;
             
-            // Efecto visual mientras habla
             document.getElementById('mic-btn').classList.add('pulse-mic');
             utterThis.onend = () => document.getElementById('mic-btn').classList.remove('pulse-mic');
             
             synth.speak(utterThis);
         }
 
-        // --- MOTOR DE ESCUCHA (SPEECH TO TEXT) ---
+        // --- MOTOR DE ESCUCHA ---
         function activarEscucha() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                alert("Tu navegador no soporta reconocimiento de voz.");
-                return;
-            }
+            if (!SpeechRecognition) return alert("Navegador no compatible.");
 
             const recognition = new SpeechRecognition();
             recognition.lang = 'es-ES';
-            recognition.interimResults = false;
 
             recognition.onstart = () => {
-                document.getElementById('mic-icon').className = "fas fa-wave-square";
-                document.getElementById('mic-btn').classList.add('bg-red-500');
-                document.getElementById('transcripcion').innerText = "Escuchando...";
+                document.getElementById('mic-icon').className = "fas fa-spinner fa-spin";
+                document.getElementById('mic-btn').classList.replace('bg-indigo-600', 'bg-red-500');
+                document.getElementById('transcripcion').innerText = "Escuchando tu pregunta...";
             };
 
             recognition.onresult = async (event) => {
                 const preguntaVoz = event.results[0][0].transcript;
-                document.getElementById('transcripcion').innerText = `"${preguntaVoz}"`;
+                document.getElementById('transcripcion').innerText = `Tú: "${preguntaVoz}"`;
                 procesarPregunta(preguntaVoz);
             };
 
-            recognition.onerror = () => {
-                resetMic();
-                elenaHabla("No pude escucharte bien, ¿puedes repetir?");
+            recognition.onend = () => {
+                document.getElementById('mic-icon').className = "fas fa-microphone";
+                document.getElementById('mic-btn').classList.replace('bg-red-500', 'bg-indigo-600');
             };
 
-            recognition.onend = () => resetMic();
-
             recognition.start();
-        }
-
-        function resetMic() {
-            document.getElementById('mic-icon').className = "fas fa-microphone";
-            document.getElementById('mic-btn').classList.remove('bg-red-500');
         }
 
         // --- LÓGICA DE NEGOCIO ---
@@ -125,24 +120,36 @@
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
+            status.innerText = "⏳ PROCESANDO...";
+
             try {
                 const response = await fetch('/upload', { method: 'POST', body: formData });
                 const data = await response.json();
-                status.innerText = `✅ ${data.filas} PRODUCTOS CARGADOS`;
-                status.className = "mt-4 text-center text-xs font-bold text-green-600 uppercase tracking-tighter";
-                elenaHabla("Inventario cargado con éxito. Estoy lista para tus consultas de voz.");
-            } catch (err) {
-                elenaHabla("Hubo un error al cargar el archivo.");
-            }
+                if(data.success) {
+                    status.innerText = `✅ INVENTARIO LISTO`;
+                    status.classList.add('text-green-600');
+                    elenaHabla("Inventario cargado. ¿Qué producto deseas consultar?");
+                }
+            } catch (err) { status.innerText = "❌ ERROR AL CARGAR"; }
         }
 
         async function procesarPregunta(pregunta) {
+            const burbuja = document.getElementById('burbuja-respuesta');
+            const textoRespuesta = document.getElementById('texto-respuesta');
+
             try {
                 const response = await fetch(`/preguntar/${encodeURIComponent(pregunta)}`);
                 const data = await response.json();
+                
+                // MOSTRAR TEXTO EN PANTALLA
+                textoRespuesta.innerText = data.respuesta_asistente;
+                burbuja.classList.remove('hidden');
+                
+                // HABLAR
                 elenaHabla(data.respuesta_asistente);
+                
             } catch (err) {
-                elenaHabla("Perdí la conexión con el servidor.");
+                elenaHabla("Error de conexión con el servidor.");
             }
         }
     </script>
