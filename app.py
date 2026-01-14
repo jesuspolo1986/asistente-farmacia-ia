@@ -67,41 +67,37 @@ def upload_file():
 
 @app.route('/preguntar/<nombre>', methods=['GET'])
 def preguntar_por_voz(nombre):
-    global df_inv, mapa_columnas
+    global df_inv
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "Por favor, primero sube el archivo de inventario."})
+        return jsonify({"respuesta_asistente": "Todavía no tengo el inventario. Por favor, súbelo."})
     
     try:
-        # Búsqueda universal: filtramos en la columna que detectamos como 'nombre' [cite: 2026-01-14]
-        col_prod = mapa_columnas['nombre']
-        resultado = df_inv[df_inv[col_prod].astype(str).str.contains(nombre, case=False, na=False)]
+        # DEPURACIÓN: Forzamos que todo sea string y buscamos en TODO el dataframe
+        # Esto hace que el buscador sea 100% universal
+        mascara = df_inv.apply(lambda row: row.astype(str).str.contains(nombre, case=False).any(), axis=1)
+        resultado = df_inv[mascara]
         
         if not resultado.empty:
-            # Creamos un resumen limpio para la IA
-            resumen = resultado.head(3).to_dict(orient='records')
-            contexto = f"Encontré esto: {resumen}. "
+            # Convertimos a diccionario para que la IA lo entienda fácil
+            datos_encontrados = resultado.head(2).to_dict(orient='records')
+            contexto = f"Encontré estos datos: {datos_encontrados}"
         else:
-            contexto = "No se encontró el producto exacto."
+            contexto = f"No encontré nada relacionado con {nombre}"
 
-        # Elena responde por voz basándose en el mapeo [cite: 2026-01-14]
-        prompt_sistema = (
-            "Eres Elena. Responde de forma muy breve y humana para ser escuchada por voz. "
-            f"Usa estos datos detectados: Columna de nombre es '{mapa_columnas['nombre']}', "
-            f"precio es '{mapa_columnas['precio']}' y stock es '{mapa_columnas['stock']}'."
-        )
-
+        # Configuración de voz de Elena
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
-                {"role": "system", "content": prompt_sistema},
-                {"role": "user", "content": f"Datos: {contexto}. Pregunta: {nombre}"}
+                {"role": "system", "content": "Eres Elena. Responde por voz de forma muy breve. Di el nombre del producto, su precio y cuántos quedan. Sé muy clara."},
+                {"role": "user", "content": f"Datos del Excel: {contexto}\nPregunta del cliente: {nombre}"}
             ],
         )
         return jsonify({"respuesta_asistente": completion.choices[0].message.content})
     
     except Exception as e:
-        return jsonify({"respuesta_asistente": "Lo siento, tuve un problema al procesar la información del archivo."})
-
+        # Si algo falla, imprimimos el error real en la consola de Render para verlo
+        print(f"Error real: {str(e)}")
+        return jsonify({"respuesta_asistente": "Hubo un pequeño error técnico al leer la fila. Intenta con otro nombre."})
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
