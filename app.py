@@ -6,7 +6,8 @@ from groq import Groq
 app = Flask(__name__)
 
 # Configura tu llave de Groq aquí
-KEY = os.environ.get("GROQ_API_KEY")
+# Así debe quedar para que funcione en la nube
+api_key_groq = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=api_key_groq)
 
 # Carga el Excel (asegúrate de subirlo a la nube también)
