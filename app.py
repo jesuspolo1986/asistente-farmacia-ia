@@ -38,22 +38,32 @@ def upload_file():
     global df_inv, mapa_columnas
     try:
         file = request.files['file']
+        # Cargamos el archivo ignorando errores de formato
         if file.filename.endswith('.xlsx'):
             df_inv = pd.read_excel(file, engine='openpyxl')
         else:
             df_inv = pd.read_csv(file)
         
-        # Limpieza básica
-        df_inv = df_inv.fillna("No disponible")
+        # --- LIMPIEZA PROFUNDA ---
+        # 1. Eliminamos filas que estén totalmente vacías
+        df_inv = df_inv.dropna(how='all')
+        
+        # 2. Si las columnas tienen nombres como "Unnamed", 
+        # intentamos usar la primera fila real como encabezado
+        if "Unnamed" in str(df_inv.columns):
+            df_inv.columns = df_inv.iloc[0]
+            df_inv = df_inv[1:]
+            
+        # 3. Normalizamos todo a texto para evitar errores de búsqueda
+        df_inv = df_inv.fillna("Desconocido")
+        
+        # 4. Mapeo inteligente
         mapa_columnas = mapeo_universal(df_inv)
         
-        return jsonify({
-            "status": "Exitoso", 
-            "filas": len(df_inv),
-            "mapeo": mapa_columnas
-        })
+        return jsonify({"status": "Exitoso", "filas": len(df_inv)})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Error fatal en carga: {e}")
+        return jsonify({"error": "Formato de archivo no compatible"}), 500
 
 @app.route('/preguntar/<nombre>', methods=['GET'])
 def preguntar_por_voz(nombre):
