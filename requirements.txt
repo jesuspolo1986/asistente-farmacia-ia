@@ -1,15 +1,5 @@
-# Servidor Web
-Flask==3.0.0
-
-# Procesamiento de Datos Excel/CSV
+flask
 pandas==2.1.4
 openpyxl==3.1.2
-
-# Reconocimiento y Síntesis de Voz
-SpeechRecognition==3.10.0
-gTTS==2.5.0
-PyAudio==0.2.14
-
-# Utilidades
-setuptools
 groq
+gTTS
