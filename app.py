@@ -40,25 +40,30 @@ def preguntar_por_voz(nombre):
     if df_inv is None:
         return jsonify({"respuesta_asistente": "Primero sube el inventario, por favor."})
     
-    # Buscamos el producto por nombre [cite: 2026-01-14]
-    # Filtramos filas que contengan el nombre buscado
-    resultado = df_inv[df_inv['producto'].str.contains(nombre, case=False, na=False)]
+    try:
+        # Buscamos cuál es la columna que contiene los nombres de productos
+        # Buscamos la primera columna que tenga texto (usualmente la primera o segunda)
+        columna_producto = df_inv.columns[0] 
+        
+        # Filtramos con el nombre de columna detectado dinámicamente [cite: 2026-01-14]
+        resultado = df_inv[df_inv[columna_producto].astype(str).str.contains(nombre, case=False, na=False)]
+        
+        if not resultado.empty:
+            contexto = resultado.to_string(index=False)
+        else:
+            contexto = f"El producto '{nombre}' no aparece en el archivo."
+
+        completion = client.chat.completions.create(
+            model="mixtral-8x7b-32768",
+            messages=[
+                {"role": "system", "content": "Eres Elena. Responde de forma muy breve con precio y stock basados en los datos proporcionados."},
+                {"role": "user", "content": f"Datos: {contexto}\nPregunta del cliente: {nombre}"}
+            ],
+        )
+        return jsonify({"respuesta_asistente": completion.choices[0].message.content})
     
-    if not resultado.empty:
-        contexto = resultado.to_string(index=False)
-    else:
-        contexto = "Producto no encontrado en la lista."
-
-    # Enviamos a la IA para una respuesta humana
-    completion = client.chat.completions.create(
-        model="mixtral-8x7b-32768",
-        messages=[
-            {"role": "system", "content": "Eres Elena. Da precio y stock de forma amable."},
-            {"role": "user", "content": f"Datos: {contexto}\nPregunta: {nombre}"}
-        ],
-    )
-    return jsonify({"respuesta_asistente": completion.choices[0].message.content})
-
+    except Exception as e:
+        return jsonify({"respuesta_asistente": f"Error al leer el archivo: {str(e)}"})
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)

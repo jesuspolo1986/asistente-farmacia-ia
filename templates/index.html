@@ -3,116 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Pro Analyst - Elena</title>
+    <title>Elena - AI Pro Analyst</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
-        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .gradient-bg { background: linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%); }
+        .pulse-mic { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); } 70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); } }
     </style>
 </head>
-<body class="gradient-bg min-h-screen font-sans">
+<body class="gradient-bg min-h-screen text-gray-800 font-sans">
 
-    <div id="subscription-banner" class="bg-yellow-500 text-white text-center py-2 hidden">
-        <i class="fas fa-exclamation-triangle"></i> 
-        Tu suscripción expiró ayer. Hoy es tu <strong>día de gracia</strong>.
+    <div id="grace-banner" class="bg-amber-500 text-white text-center py-2 text-sm font-bold hidden">
+        <i class="fas fa-clock mr-2"></i> MODO DÍA DE GRACIA: Tu suscripción expiró ayer.
     </div>
 
-    <div class="container mx-auto px-4 py-8">
-        <div class="max-w-4xl mx-auto">
-            <div class="text-white text-center mb-8">
-                <h1 class="text-4xl font-bold">AI Pro Analyst</h1>
-                <p class="opacity-80 text-lg">Asistente Inteligente para Farmacias</p>
+    <div class="container mx-auto px-4 py-6">
+        <div class="max-w-md mx-auto">
+            
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-white tracking-tight">AI Pro Analyst</h1>
+                <p class="text-indigo-200 uppercase text-xs tracking-widest font-semibold mt-1">Elena Voice Systems</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="glass p-6 rounded-2xl shadow-xl border border-white/20 h-fit">
-                    <h2 class="font-bold text-gray-800 mb-4"><i class="fas fa-file-excel text-green-600"></i> Inventario</h2>
-                    
-                    <div class="space-y-4">
-                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-500 transition cursor-pointer" onclick="document.getElementById('fileInput').click()">
-                            <p class="text-sm text-gray-500">Haz clic para subir Excel o CSV</p>
-                            <input type="file" id="fileInput" class="hidden" accept=".xlsx, .csv" onchange="subirArchivo()">
-                        </div>
-                        <div id="status-carga" class="text-xs font-medium text-center py-1 rounded bg-gray-100 text-gray-600">
-                            Esperando archivo...
-                        </div>
-                        
-                        <button onclick="alert('Función de Gráficos disponible mañana')" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium">
-                            <i class="fas fa-chart-bar"></i> Reporte PDF
-                        </button>
-                    </div>
+            <div id="upload-panel" class="glass rounded-3xl p-6 shadow-2xl mb-6 border border-white/20">
+                <h2 class="text-lg font-bold mb-4 flex items-center">
+                    <i class="fas fa-file-csv text-indigo-600 mr-2"></i> Base de Datos
+                </h2>
+                <div class="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center hover:bg-indigo-50 transition-all cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-cloud-upload-alt text-3xl text-indigo-400 mb-2"></i>
+                    <p class="text-sm text-gray-500">Sube el inventario (Excel/CSV)</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .csv" onchange="subirArchivo()">
                 </div>
-
-                <div class="md:col-span-2 glass p-6 rounded-2xl shadow-xl flex flex-col h-[500px]">
-                    <div class="flex items-center space-x-3 mb-4 border-b pb-4">
-                        <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
-                            <i class="fas fa-robot text-xl"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-bold text-gray-800 leading-none">Elena</h3>
-                            <span class="text-xs text-green-500">● En línea</span>
-                        </div>
-                    </div>
-
-                    <div id="chat-box" class="flex-grow overflow-y-auto mb-4 space-y-4 pr-2">
-                        <div class="bg-indigo-50 p-3 rounded-lg max-w-[80%]">
-                            Hola, soy Elena. Sube tu inventario y pregúntame por precios o stock.
-                        </div>
-                    </div>
-
-                    <div class="flex space-x-2">
-                        <input type="text" id="userInput" placeholder="Preguntar por paracetamol..." class="flex-grow border rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <button onclick="enviarPregunta()" class="bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 transition">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
+                <div id="status-carga" class="mt-4 text-center text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                    Sin datos cargados
                 </div>
             </div>
+
+            <div class="glass rounded-3xl p-8 shadow-2xl border border-white/20 text-center relative overflow-hidden">
+                <div id="elena-status" class="text-xs font-bold text-indigo-500 mb-6 uppercase tracking-widest">Lista para ayudar</div>
+                
+                <div class="flex justify-center mb-8">
+                    <button id="mic-btn" onclick="activarEscucha()" class="w-32 h-32 bg-indigo-600 rounded-full flex items-center justify-center text-white text-4xl shadow-lg transition-all active:scale-95">
+                        <i class="fas fa-microphone" id="mic-icon"></i>
+                    </button>
+                </div>
+
+                <div id="transcripcion" class="text-sm italic text-gray-500 min-h-[40px] mb-4">
+                    "Toca el micrófono y pregunta..."
+                </div>
+
+                <button class="w-full bg-gray-100 text-gray-500 py-3 rounded-2xl text-sm font-bold flex items-center justify-center space-x-2 hover:bg-gray-200 transition">
+                    <i class="fas fa-file-pdf"></i>
+                    <span>REPORTE ANALÍTICO (Mañana)</span>
+                </button>
+            </div>
+
         </div>
     </div>
 
     <script>
+        // --- MOTOR DE VOZ (TEXT TO SPEECH) ---
+        function elenaHabla(texto) {
+            const synth = window.speechSynthesis;
+            const utterThis = new SpeechSynthesisUtterance(texto);
+            utterThis.lang = 'es-ES';
+            utterThis.pitch = 1.1; // Un poco más aguda para que suene como "Elena"
+            utterThis.rate = 1.0;
+            
+            // Efecto visual mientras habla
+            document.getElementById('mic-btn').classList.add('pulse-mic');
+            utterThis.onend = () => document.getElementById('mic-btn').classList.remove('pulse-mic');
+            
+            synth.speak(utterThis);
+        }
+
+        // --- MOTOR DE ESCUCHA (SPEECH TO TEXT) ---
+        function activarEscucha() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Tu navegador no soporta reconocimiento de voz.");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'es-ES';
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                document.getElementById('mic-icon').className = "fas fa-wave-square";
+                document.getElementById('mic-btn').classList.add('bg-red-500');
+                document.getElementById('transcripcion').innerText = "Escuchando...";
+            };
+
+            recognition.onresult = async (event) => {
+                const preguntaVoz = event.results[0][0].transcript;
+                document.getElementById('transcripcion').innerText = `"${preguntaVoz}"`;
+                procesarPregunta(preguntaVoz);
+            };
+
+            recognition.onerror = () => {
+                resetMic();
+                elenaHabla("No pude escucharte bien, ¿puedes repetir?");
+            };
+
+            recognition.onend = () => resetMic();
+
+            recognition.start();
+        }
+
+        function resetMic() {
+            document.getElementById('mic-icon').className = "fas fa-microphone";
+            document.getElementById('mic-btn').classList.remove('bg-red-500');
+        }
+
+        // --- LÓGICA DE NEGOCIO ---
         async function subirArchivo() {
             const fileInput = document.getElementById('fileInput');
             const status = document.getElementById('status-carga');
-            if (!fileInput.files[0]) return;
-
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
-            status.innerText = "Subiendo...";
             try {
                 const response = await fetch('/upload', { method: 'POST', body: formData });
                 const data = await response.json();
-                status.innerText = `✅ ${data.filas} productos cargados`;
-                status.classList.replace('bg-gray-100', 'bg-green-100');
-                status.classList.replace('text-gray-600', 'text-green-700');
+                status.innerText = `✅ ${data.filas} PRODUCTOS CARGADOS`;
+                status.className = "mt-4 text-center text-xs font-bold text-green-600 uppercase tracking-tighter";
+                elenaHabla("Inventario cargado con éxito. Estoy lista para tus consultas de voz.");
             } catch (err) {
-                status.innerText = "❌ Error al cargar";
+                elenaHabla("Hubo un error al cargar el archivo.");
             }
         }
 
-        async function enviarPregunta() {
-            const input = document.getElementById('userInput');
-            const chatBox = document.getElementById('chat-box');
-            if (!input.value) return;
-
-            // Mostrar mensaje usuario
-            chatBox.innerHTML += `<div class="bg-gray-100 p-3 rounded-lg ml-auto max-w-[80%] text-right">${input.value}</div>`;
-            
-            const pregunta = input.value;
-            input.value = "";
-
+        async function procesarPregunta(pregunta) {
             try {
-                const response = await fetch(`/preguntar/${pregunta}`);
+                const response = await fetch(`/preguntar/${encodeURIComponent(pregunta)}`);
                 const data = await response.json();
-                
-                // Mostrar respuesta de Elena
-                chatBox.innerHTML += `<div class="bg-indigo-50 p-3 rounded-lg max-w-[80%] shadow-sm border border-indigo-100"><i class="fas fa-robot mr-2"></i>${data.respuesta_asistente}</div>`;
-                chatBox.scrollTop = chatBox.scrollHeight;
+                elenaHabla(data.respuesta_asistente);
             } catch (err) {
-                chatBox.innerHTML += `<div class="text-red-500 text-sm">Error al conectar con Elena.</div>`;
+                elenaHabla("Perdí la conexión con el servidor.");
             }
         }
     </script>
