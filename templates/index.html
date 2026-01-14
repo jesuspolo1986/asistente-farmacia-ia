@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Asistente de Farmacia IA</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 2rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 400px; }
+        .avatar { width: 100px; height: 100px; background: #007bff; border-radius: 50%; margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; box-shadow: 0 0 20px #007bff; transition: transform 0.3s; }
+        .listening { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0,123,255,0.7); } 70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(0,123,255,0); } 100% { transform: scale(1); } }
+        button { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 50px; cursor: pointer; font-size: 1rem; margin-top: 10px; }
+        #status { margin-top: 1rem; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div id="avatar" class="avatar">🤖</div>
+        <h2>Asistente de Farmacia</h2>
+        <p id="status">Presiona el botón para preguntar por un producto</p>
+        <button onclick="comenzarEscuchar()">🎤 Hablar con el Asistente</button>
+        <div id="resultado" style="margin-top: 20px; font-weight: bold; color: #007bff;"></div>
+    </div>
+
+    <script>
+        function comenzarEscuchar() {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'es-ES';
+            const avatar = document.getElementById('avatar');
+            const status = document.getElementById('status');
+
+            recognition.onstart = () => {
+                avatar.classList.add('listening');
+                status.innerText = "Escuchando...";
+            };
+
+            recognition.onresult = (event) => {
+                const producto = event.results[0][0].transcript;
+                status.innerText = `Preguntaste por: ${producto}`;
+                consultarPrecio(producto);
+            };
+
+            recognition.onend = () => {
+                avatar.classList.remove('listening');
+            };
+
+            recognition.start();
+        }
+
+       async function consultarPrecio(producto) {
+    const res = await fetch(`/preguntar/${producto}`);
+    const data = await res.json();
+    const respuesta = data.respuesta_asistente;
+    
+    document.getElementById('resultado').innerText = respuesta;
+
+    // Configuración de la Voz Femenina
+    const mensaje = new SpeechSynthesisUtterance(respuesta);
+    mensaje.lang = 'es-ES';
+    
+    // Buscamos una voz que suene femenina en el sistema
+    const voces = window.speechSynthesis.getVoices();
+    const vozFemenina = voces.find(voz => 
+        (voz.name.includes('Google español') || voz.name.includes('Helena') || voz.name.includes('Zira') || voz.name.includes('Microsoft Sabina'))
+    );
+
+    if (vozFemenina) {
+        mensaje.voice = vozFemenina;
+    }
+
+    mensaje.rate = 1.0; // Velocidad normal
+    mensaje.pitch = 1.1; // Tono ligeramente más agudo para sonar más natural
+    
+    window.speechSynthesis.speak(mensaje);
+}
+        
+    </script>
+</body>
+</html>
