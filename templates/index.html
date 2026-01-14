@@ -2,78 +2,119 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Asistente de Farmacia IA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Pro Analyst - Elena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: white; padding: 2rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 400px; }
-        .avatar { width: 100px; height: 100px; background: #007bff; border-radius: 50%; margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; box-shadow: 0 0 20px #007bff; transition: transform 0.3s; }
-        .listening { animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0,123,255,0.7); } 70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(0,123,255,0); } 100% { transform: scale(1); } }
-        button { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 50px; cursor: pointer; font-size: 1rem; margin-top: 10px; }
-        #status { margin-top: 1rem; color: #555; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
     </style>
 </head>
-<body>
-    <div class="card">
-        <div id="avatar" class="avatar">🤖</div>
-        <h2>Asistente de Farmacia</h2>
-        <p id="status">Presiona el botón para preguntar por un producto</p>
-        <button onclick="comenzarEscuchar()">🎤 Hablar con el Asistente</button>
-        <div id="resultado" style="margin-top: 20px; font-weight: bold; color: #007bff;"></div>
+<body class="gradient-bg min-h-screen font-sans">
+
+    <div id="subscription-banner" class="bg-yellow-500 text-white text-center py-2 hidden">
+        <i class="fas fa-exclamation-triangle"></i> 
+        Tu suscripción expiró ayer. Hoy es tu <strong>día de gracia</strong>.
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-white text-center mb-8">
+                <h1 class="text-4xl font-bold">AI Pro Analyst</h1>
+                <p class="opacity-80 text-lg">Asistente Inteligente para Farmacias</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass p-6 rounded-2xl shadow-xl border border-white/20 h-fit">
+                    <h2 class="font-bold text-gray-800 mb-4"><i class="fas fa-file-excel text-green-600"></i> Inventario</h2>
+                    
+                    <div class="space-y-4">
+                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-500 transition cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                            <p class="text-sm text-gray-500">Haz clic para subir Excel o CSV</p>
+                            <input type="file" id="fileInput" class="hidden" accept=".xlsx, .csv" onchange="subirArchivo()">
+                        </div>
+                        <div id="status-carga" class="text-xs font-medium text-center py-1 rounded bg-gray-100 text-gray-600">
+                            Esperando archivo...
+                        </div>
+                        
+                        <button onclick="alert('Función de Gráficos disponible mañana')" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium">
+                            <i class="fas fa-chart-bar"></i> Reporte PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2 glass p-6 rounded-2xl shadow-xl flex flex-col h-[500px]">
+                    <div class="flex items-center space-x-3 mb-4 border-b pb-4">
+                        <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
+                            <i class="fas fa-robot text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-800 leading-none">Elena</h3>
+                            <span class="text-xs text-green-500">● En línea</span>
+                        </div>
+                    </div>
+
+                    <div id="chat-box" class="flex-grow overflow-y-auto mb-4 space-y-4 pr-2">
+                        <div class="bg-indigo-50 p-3 rounded-lg max-w-[80%]">
+                            Hola, soy Elena. Sube tu inventario y pregúntame por precios o stock.
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-2">
+                        <input type="text" id="userInput" placeholder="Preguntar por paracetamol..." class="flex-grow border rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button onclick="enviarPregunta()" class="bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 transition">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        function comenzarEscuchar() {
-            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-            recognition.lang = 'es-ES';
-            const avatar = document.getElementById('avatar');
-            const status = document.getElementById('status');
+        async function subirArchivo() {
+            const fileInput = document.getElementById('fileInput');
+            const status = document.getElementById('status-carga');
+            if (!fileInput.files[0]) return;
 
-            recognition.onstart = () => {
-                avatar.classList.add('listening');
-                status.innerText = "Escuchando...";
-            };
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
 
-            recognition.onresult = (event) => {
-                const producto = event.results[0][0].transcript;
-                status.innerText = `Preguntaste por: ${producto}`;
-                consultarPrecio(producto);
-            };
-
-            recognition.onend = () => {
-                avatar.classList.remove('listening');
-            };
-
-            recognition.start();
+            status.innerText = "Subiendo...";
+            try {
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+                status.innerText = `✅ ${data.filas} productos cargados`;
+                status.classList.replace('bg-gray-100', 'bg-green-100');
+                status.classList.replace('text-gray-600', 'text-green-700');
+            } catch (err) {
+                status.innerText = "❌ Error al cargar";
+            }
         }
 
-       async function consultarPrecio(producto) {
-    const res = await fetch(`/preguntar/${producto}`);
-    const data = await res.json();
-    const respuesta = data.respuesta_asistente;
-    
-    document.getElementById('resultado').innerText = respuesta;
+        async function enviarPregunta() {
+            const input = document.getElementById('userInput');
+            const chatBox = document.getElementById('chat-box');
+            if (!input.value) return;
 
-    // Configuración de la Voz Femenina
-    const mensaje = new SpeechSynthesisUtterance(respuesta);
-    mensaje.lang = 'es-ES';
-    
-    // Buscamos una voz que suene femenina en el sistema
-    const voces = window.speechSynthesis.getVoices();
-    const vozFemenina = voces.find(voz => 
-        (voz.name.includes('Google español') || voz.name.includes('Helena') || voz.name.includes('Zira') || voz.name.includes('Microsoft Sabina'))
-    );
+            // Mostrar mensaje usuario
+            chatBox.innerHTML += `<div class="bg-gray-100 p-3 rounded-lg ml-auto max-w-[80%] text-right">${input.value}</div>`;
+            
+            const pregunta = input.value;
+            input.value = "";
 
-    if (vozFemenina) {
-        mensaje.voice = vozFemenina;
-    }
-
-    mensaje.rate = 1.0; // Velocidad normal
-    mensaje.pitch = 1.1; // Tono ligeramente más agudo para sonar más natural
-    
-    window.speechSynthesis.speak(mensaje);
-}
-        
+            try {
+                const response = await fetch(`/preguntar/${pregunta}`);
+                const data = await response.json();
+                
+                // Mostrar respuesta de Elena
+                chatBox.innerHTML += `<div class="bg-indigo-50 p-3 rounded-lg max-w-[80%] shadow-sm border border-indigo-100"><i class="fas fa-robot mr-2"></i>${data.respuesta_asistente}</div>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
+            } catch (err) {
+                chatBox.innerHTML += `<div class="text-red-500 text-sm">Error al conectar con Elena.</div>`;
+            }
+        }
     </script>
 </body>
 </html>
