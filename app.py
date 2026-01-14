@@ -43,33 +43,38 @@ def upload_file():
 def preguntar_por_voz(nombre):
     global df_inv
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "Inventario no cargado."})
+        return jsonify({"respuesta_asistente": "El inventario no ha sido cargado aún."})
     
     try:
-        # Limpiamos el término de búsqueda de puntos y espacios
-        termino = "".join(e for e in nombre if e.isalnum()).lower().strip()
-        
-        # Búsqueda universal
-        mask = df_inv.apply(lambda row: row.str.lower().str.contains(termino)).any(axis=1)
+        # 1. Limpieza extrema del nombre (quita puntos del dictado por voz)
+        termino = "".join(e for e in nombre if e.isalnum() or e.isspace()).lower().strip()
+        print(f"Buscando: {termino}") # Esto saldrá en tus logs de Koyeb
+
+        # 2. Buscar en el DataFrame (Ajustado para buscar por nombre de producto)
+        # Buscamos si el término está en alguna celda de la fila
+        mask = df_inv.apply(lambda row: row.astype(str).str.lower().str.contains(termino)).any(axis=1)
         resultado = df_inv[mask]
         
         if not resultado.empty:
-            fila = resultado.iloc[0].to_dict()
-            contexto = f"Datos: {fila}"
+            datos_producto = resultado.iloc[0].to_dict()
+            contexto = f"Producto encontrado: {datos_producto}"
         else:
-            contexto = f"No encontré {nombre}."
+            contexto = f"No encontré el producto {nombre} en el inventario."
 
+        # 3. Llamada a Groq (Elena)
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
-                {"role": "system", "content": "Eres Elena. Responde por voz de forma muy breve con precio y stock."},
-                {"role": "user", "content": f"Contexto: {contexto}. Pregunta: {nombre}"}
+                {"role": "system", "content": "Eres Elena, una asistente de farmacia amable. Di el precio y el stock de forma muy breve para ser leída por voz."},
+                {"role": "user", "content": f"Contexto: {contexto}. Pregunta del usuario: {nombre}"}
             ],
         )
         return jsonify({"respuesta_asistente": completion.choices[0].message.content})
-    except Exception as e:
-        return jsonify({"respuesta_asistente": "Error al procesar la voz."})
 
+    except Exception as e:
+        # Imprime el error real en los logs de Koyeb para que podamos verlo
+        print(f"ERROR REAL: {str(e)}") 
+        return jsonify({"respuesta_asistente": f"Error técnico: {str(e)}"})
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))
     app.run(host='0.0.0.0', port=port)
