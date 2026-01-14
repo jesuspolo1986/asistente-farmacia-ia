@@ -60,36 +60,37 @@ def preguntar_por_voz(nombre):
         return jsonify({"respuesta_asistente": "Todavía no tengo el inventario. Por favor, súbelo."})
     
     try:
-        # 1. Aseguramos que el nombre buscado sea texto limpio
+        # 1. Limpiamos el nombre que llega por voz
         termino = str(nombre).strip().lower()
         
-        # 2. Buscamos de la forma más simple posible en todas las columnas
-        # Creamos una copia temporal para no dañar el original
-        df_temp = df_inv.astype(str)
-        
-        # Buscamos coincidencias
-        resultado = df_temp[df_temp.apply(lambda x: x.str.lower().str.contains(termino)).any(axis=1)]
+        # 2. BÚSQUEDA DIRECTA Y SEGURA
+        # Buscamos en la columna 'Nombre' (convertida a minúsculas para comparar)
+        # Usamos .values[0] para obtener los datos de forma rápida y sin errores de índice
+        resultado = df_inv[df_inv['Nombre'].astype(str).str.lower().str.contains(termino, na=False)]
         
         if not resultado.empty:
-            # Tomamos la primera coincidencia y la convertimos a un texto plano simple
-            fila = resultado.iloc[0]
-            contexto = f"Producto: {fila.get('nombre', 'N/A')}, Precio: {fila.get('precio', 'N/A')}, Stock: {fila.get('stock', 'N/A')}"
+            # Extraemos los datos de la primera fila encontrada de forma manual
+            prod_nom = resultado.iloc[0]['Nombre']
+            prod_pre = resultado.iloc[0]['Precio']
+            prod_sto = resultado.iloc[0]['Stock']
+            contexto = f"Producto: {prod_nom}, Precio: {prod_pre}, Stock: {prod_sto}"
         else:
-            contexto = f"No encontré el producto {nombre}."
+            contexto = f"No encontré el producto {nombre} en el inventario."
 
-        # 3. Llamada a Groq
+        # 3. Respuesta de Elena
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
-                {"role": "system", "content": "Eres Elena. Responde por voz de forma muy breve con el precio y stock del producto encontrado."},
-                {"role": "user", "content": f"Dato real: {contexto}. Pregunta: {nombre}"}
+                {"role": "system", "content": "Eres Elena. Responde por voz de forma muy breve. Di solo el precio y las unidades disponibles."},
+                {"role": "user", "content": f"Datos: {contexto}. Pregunta: {nombre}"}
             ],
         )
         return jsonify({"respuesta_asistente": completion.choices[0].message.content})
     
     except Exception as e:
-        print(f"ERROR CRÍTICO: {e}")
-        return jsonify({"respuesta_asistente": "Lo siento, hubo un error de lectura. Intenta decir solo el nombre del medicamento."})
+        # Este print aparecerá en tus logs de Render para que sepas qué pasó exactamente
+        print(f"Error específico en la búsqueda: {e}")
+        return jsonify({"respuesta_asistente": "Perdón, tuve un problema con el archivo. Intenta subirlo de nuevo."})
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
