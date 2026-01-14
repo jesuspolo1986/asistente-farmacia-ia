@@ -39,51 +39,59 @@ def upload():
     except Exception as e:
         return jsonify({"error": f"Error al procesar Excel: {str(e)}"}), 500
 
-@app.route('/preguntar/<nombre>', methods=['GET'])
-def preguntar_por_voz(nombre):
-    global df_inv
-    if df_inv is None:
-        return jsonify({"respuesta_asistente": "El sistema está listo, pero falta el inventario. Súbelo para empezar."})
-    
-    try:
-        # SENIOR: Búsqueda Semántica Mejorada
-        termino = "".join(e for e in nombre if e.isalnum() or e.isspace()).lower().strip()
-        mask = df_inv.apply(lambda row: row.astype(str).str.lower().str.contains(termino)).any(axis=1)
-        resultado = df_inv[mask]
+ado = df_inv[mask]
         
         if not resultado.empty:
             # Seleccionamos la primera coincidencia y la convertimos en lenguaje humano
             fila = resultado.iloc[0].to_dict()
             contexto_datos = " | ".join([f"{k}: {v}" for k, v in fila.items()])
-            encontrado = True
-        else:
-            contexto_datos = "PRODUCTO NO ENCONTRADO EN EXCEL."
-            encontrado = False
-
-        # SENIOR: System Prompt Blindado (Evita consejos médicos genéricos)
-        prompt_sistema = (
-            "Eres Elena, la Inteligencia Operativa de esta Farmacia. "
-            "REGLAS CRÍTICAS:\n"
-            "1. Tienes PROHIBIDO dar consejos médicos o sugerir ir a otras farmacias.\n"
-            "2. Tu única fuente de información es el CONTEXTO DE DATOS proporcionado.\n"
-            "3. Si el producto existe, responde: 'El [Nombre] tiene un precio de [Precio] y nos quedan [Stock]'.\n"
-            "4. Si NO existe, responde: 'Lo siento, no tengo ese producto registrado en mi inventario actual'.\n"
-            "5. Usa un tono profesional, amable y muy directo para voz."
-        )
-
-        response = client.chat.complete(
+            encont@app.route('/preguntar/<nombre>', methods=['GET'])
+@app.route('/preguntar/<nombre_completo>', methods=['GET'])
+def preguntar_por_voz(nombre_completo):
+    global df_inv
+    if df_inv is None:
+        return jsonify({"respuesta_asistente": "Inventario no cargado."})
+    
+    try:
+        # PASO 1: Usar la IA para extraer el producto (Nivel Senior)
+        # Esto convierte "Cual es el precio de la loratadina" en solo "loratadina"
+        extraer = client.chat.complete(
             model="mistral-small",
             messages=[
-                {"role": "system", "content": prompt_sistema},
-                {"role": "user", "content": f"CONTEXTO DE DATOS: {contexto_datos}\nPREGUNTA USUARIO: {nombre}"}
-            ],
-            temperature=0.1 # SENIOR: Temperatura baja = Menos inventiva, más precisión
+                {"role": "system", "content": "Tu tarea es extraer solo el nombre del medicamento de la frase. Responde SOLO con el nombre del producto, nada más."},
+                {"role": "user", "content": nombre_completo}
+            ]
+        )
+        producto_clave = extraer.choices[0].message.content.strip().lower()
+        print(f"IA extrajo: {producto_clave}") # Para ver el proceso en Koyeb
+
+        # PASO 2: Búsqueda flexible en el DataFrame
+        mask = df_inv.apply(lambda row: row.astype(str).str.lower().str.contains(producto_clave)).any(axis=1)
+        resultado = df_inv[mask]
+        
+        if not resultado.empty:
+            fila = resultado.iloc[0].to_dict()
+            contexto = ", ".join([f"{k} es {v}" for k, v in fila.items()])
+        else:
+            contexto = "No encontrado."
+
+        # PASO 3: Respuesta final de Elena
+        prompt_final = (
+            "Eres Elena. Usa los datos para responder de forma amable. "
+            "Si el producto existe, da el precio y stock. Si no, di que no lo encontraste."
         )
         
-        return jsonify({"respuesta_asistente": response.choices[0].message.content})
+        final = client.chat.complete(
+            model="mistral-small",
+            messages=[
+                {"role": "system", "content": prompt_final},
+                {"role": "user", "content": f"Datos: {contexto}. Pregunta: {nombre_completo}"}
+            ]
+        )
+        
+        return jsonify({"respuesta_asistente": final.choices[0].message.content})
 
     except Exception as e:
-        return jsonify({"respuesta_asistente": f"Error en procesamiento: {str(e)}"})
-
+        return jsonify({"respuesta_asistente": f"Error: {str(e)}"})
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
