@@ -57,32 +57,39 @@ def upload_file():
 def preguntar_por_voz(nombre):
     global df_inv
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "Primero sube el inventario."})
+        return jsonify({"respuesta_asistente": "Todavía no tengo el inventario. Por favor, súbelo."})
     
     try:
-        # Buscamos en todas las columnas, ahora que todo es texto es imposible que falle
-        mascara = df_inv.apply(lambda row: row.str.contains(nombre, case=False).any(), axis=1)
-        resultado = df_inv[mascara]
+        # 1. Aseguramos que el nombre buscado sea texto limpio
+        termino = str(nombre).strip().lower()
+        
+        # 2. Buscamos de la forma más simple posible en todas las columnas
+        # Creamos una copia temporal para no dañar el original
+        df_temp = df_inv.astype(str)
+        
+        # Buscamos coincidencias
+        resultado = df_temp[df_temp.apply(lambda x: x.str.lower().str.contains(termino)).any(axis=1)]
         
         if not resultado.empty:
-            # Convertimos a una lista simple de texto para Elena
-            datos = resultado.head(2).to_dict(orient='records')
-            contexto = f"Medicamentos encontrados: {datos}"
+            # Tomamos la primera coincidencia y la convertimos a un texto plano simple
+            fila = resultado.iloc[0]
+            contexto = f"Producto: {fila.get('nombre', 'N/A')}, Precio: {fila.get('precio', 'N/A')}, Stock: {fila.get('stock', 'N/A')}"
         else:
-            contexto = f"No tengo información sobre {nombre}."
+            contexto = f"No encontré el producto {nombre}."
 
+        # 3. Llamada a Groq
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
-                {"role": "system", "content": "Eres Elena. Responde por voz: di el nombre, el precio y el stock de forma muy breve."},
-                {"role": "user", "content": f"Datos: {contexto}. Pregunta: {nombre}"}
+                {"role": "system", "content": "Eres Elena. Responde por voz de forma muy breve con el precio y stock del producto encontrado."},
+                {"role": "user", "content": f"Dato real: {contexto}. Pregunta: {nombre}"}
             ],
         )
         return jsonify({"respuesta_asistente": completion.choices[0].message.content})
+    
     except Exception as e:
-        # Log para que tú veas qué pasó en Render si algo falla
-        print(f"DEBUG: {e}")
-        return jsonify({"respuesta_asistente": "Perdón, tuve un error al procesar la fila."})
+        print(f"ERROR CRÍTICO: {e}")
+        return jsonify({"respuesta_asistente": "Lo siento, hubo un error de lectura. Intenta decir solo el nombre del medicamento."})
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
