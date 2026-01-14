@@ -38,32 +38,39 @@ def upload_file():
 def preguntar_por_voz(nombre):
     global df_inv
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "Primero sube el inventario, por favor."})
+        return jsonify({"respuesta_asistente": "Todavía no tengo el inventario. Por favor, súbelo."})
     
     try:
-        # Buscamos cuál es la columna que contiene los nombres de productos
-        # Buscamos la primera columna que tenga texto (usualmente la primera o segunda)
-        columna_producto = df_inv.columns[0] 
+        # Limpiamos los nombres de las columnas por si tienen espacios locos
+        df_inv.columns = df_inv.columns.str.strip().str.lower()
         
-        # Filtramos con el nombre de columna detectado dinámicamente [cite: 2026-01-14]
-        resultado = df_inv[df_inv[columna_producto].astype(str).str.contains(nombre, case=False, na=False)]
+        # Intentamos encontrar la columna de nombres (producto, nombre, articulo...)
+        posibles_nombres = ['producto', 'nombre', 'articulo', 'descripcion']
+        col_busqueda = next((c for c in posibles_nombres if c in df_inv.columns), df_inv.columns[0])
+
+        # Buscamos el producto [cite: 2026-01-14]
+        # Convertimos todo a texto para evitar errores con números
+        mascara = df_inv[col_busqueda].astype(str).str.contains(nombre, case=False, na=False)
+        resultado = df_inv[mascara]
         
         if not resultado.empty:
-            contexto = resultado.to_string(index=False)
+            # Tomamos solo las primeras 3 coincidencias para que Elena no hable demasiado
+            contexto = resultado.head(3).to_string(index=False)
         else:
-            contexto = f"El producto '{nombre}' no aparece en el archivo."
+            contexto = "No encontré ese producto, pero puedo ayudarte con otro."
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
-                {"role": "system", "content": "Eres Elena. Responde de forma muy breve con precio y stock basados en los datos proporcionados."},
-                {"role": "user", "content": f"Datos: {contexto}\nPregunta del cliente: {nombre}"}
+                {"role": "system", "content": "Eres Elena. Escuchaste una pregunta y debes responder solo con el precio y stock disponible de forma muy breve y clara para ser escuchada."},
+                {"role": "user", "content": f"Inventario: {contexto}\nPregunta: {nombre}"}
             ],
         )
         return jsonify({"respuesta_asistente": completion.choices[0].message.content})
     
     except Exception as e:
-        return jsonify({"respuesta_asistente": f"Error al leer el archivo: {str(e)}"})
+        print(f"Error detallado: {e}") # Esto aparecerá en los logs de Render
+        return jsonify({"respuesta_asistente": "Perdón, tuve un problema al leer los datos. ¿Podrías revisar el formato del Excel?"})
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
