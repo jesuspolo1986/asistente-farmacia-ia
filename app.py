@@ -47,53 +47,37 @@ def upload():
 def preguntar_por_voz(nombre_completo):
     global df_inv
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "El inventario no ha sido cargado aún."})
+        return jsonify({"respuesta_asistente": "El inventario no está cargado."})
     
     try:
-        # PASO 1: Extracción de Entidad (IA) - Limpia la frase del usuario
-        extraer = client.chat.complete(
+        # PASO 1: Convertimos el inventario a un resumen de texto para la IA
+        # Esto le permite a Elena "leer" toda la tabla de una vez
+        resumen_inventario = df_inv.to_string(index=False)
+        fecha_hoy = "2026-01-14" # Fecha actual del sistema
+
+        # PASO 2: Prompt Maestro (Nivel AI Pro Analyst)
+        prompt_sistema = f"Eres Elena, asistente experta de farmacia. Hoy es {fecha_hoy}. " \
+                         "Tienes acceso a este inventario:\n" \
+                         f"{resumen_inventario}\n" \
+                         "REGLAS:\n" \
+                         "1. Si preguntan por vencimientos, compara la fecha de hoy con la columna 'Vencimiento'.\n" \
+                         "2. Si preguntan por stock bajo, compara 'Stock Actual' con 'Stock Mínimo'.\n" \
+                         "3. Responde de forma amable y profesional."
+
+        response = client.chat.complete(
             model="mistral-small",
             messages=[
-                {"role": "system", "content": "Extrae solo el nombre del medicamento. Responde SOLAMENTE el nombre."},
+                {"role": "system", "content": prompt_sistema},
                 {"role": "user", "content": nombre_completo}
             ],
             temperature=0
         )
-        producto_clave = extraer.choices[0].message.content.strip().lower()
-        print(f"Buscando producto: {producto_clave}")
-
-        # PASO 2: Búsqueda en DataFrame
-        mask = df_inv.apply(lambda row: row.astype(str).str.lower().str.contains(producto_clave)).any(axis=1)
-        resultado = df_inv[mask]
         
-        if not resultado.empty:
-            fila = resultado.iloc[0].to_dict()
-            # Convertimos a formato legible para la IA
-            contexto = " | ".join([f"{k}: {v}" for k, v in fila.items()])
-        else:
-            contexto = "No encontrado en el inventario."
-
-        # PASO 3: Respuesta final de Elena (Voz natural)
-        prompt_final = (
-            "Eres Elena, asistente de farmacia. Tu respuesta será leída por voz. "
-            "Usa los datos proporcionados para dar precio y stock. "
-            "Si no encuentras el producto, sé amable y di que no está disponible."
-        )
-        
-        final = client.chat.complete(
-            model="mistral-small",
-            messages=[
-                {"role": "system", "content": prompt_final},
-                {"role": "user", "content": f"DATOS: {contexto}. PREGUNTA: {nombre_completo}"}
-            ],
-            temperature=0.2
-        )
-        
-        return jsonify({"respuesta_asistente": final.choices[0].message.content})
+        respuesta = response.choices[0].message.content
+        return jsonify({"respuesta_asistente": respuesta})
 
     except Exception as e:
-        print(f"Error en el proceso: {e}")
-        return jsonify({"respuesta_asistente": "Lo siento, tuve un problema técnico al procesar tu solicitud."})
-
+        print(f"Error: {e}")
+        return jsonify({"respuesta_asistente": "Error al analizar los datos."})
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
