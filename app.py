@@ -14,22 +14,50 @@ df_inv = None
 def home():
     return render_template('index.html')
 
+import io  # Asegúrate de tener esta importación arriba
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global df_inv
     try:
-        file = request.files.get('file')
-        if not file: return jsonify({"error": "No hay archivo"}), 400
-        
-        stream = io.BytesIO(file.read())
-        # Leemos ignorando espacios en los nombres de columnas
-        df_inv = pd.read_csv(stream, skipinitialspace=True)
-        df_inv.columns = [str(c).strip().lower() for c in df_inv.columns]
-        
-        return jsonify({"status": "Exitoso", "columnas": list(df_inv.columns)})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # 1. Verificación de seguridad básica
+        if 'file' not in request.files:
+            return jsonify({"error": "No se encontró el archivo en la petición"}), 400
+            
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "Nombre de archivo vacío"}), 400
 
+        # 2. LECTURA EN MEMORIA (Como en AI Pro Analyst)
+        # Esto evita el error 500 porque no necesita escribir en el disco de Render
+        data = file.read()
+        stream = io.BytesIO(data)
+        
+        if file.filename.endswith('.csv'):
+            # skipinitialspace ayuda con los CSV mal formados
+            df_inv = pd.read_csv(stream, skipinitialspace=True)
+        else:
+            # engine='openpyxl' es vital para archivos .xlsx
+            df_inv = pd.read_excel(stream, engine='openpyxl')
+
+        # 3. LIMPIEZA INMEDIATA
+        # Quitamos espacios y normalizamos columnas
+        df_inv.columns = [str(c).strip() for c in df_inv.columns]
+        # Convertimos todo a string para que las búsquedas no den error
+        df_inv = df_inv.astype(str)
+
+        print(f"Archivo cargado con éxito. Columnas: {list(df_inv.columns)}")
+        
+        return jsonify({
+            "status": "Exitoso", 
+            "filas": len(df_inv),
+            "columnas": list(df_inv.columns)
+        })
+
+    except Exception as e:
+        # Este print saldrá en tus logs de Render para decirte el error exacto
+        print(f"ERROR CRÍTICO EN UPLOAD: {str(e)}")
+        return jsonify({"error": f"Fallo interno: {str(e)}"}), 500
 @app.route('/preguntar/<nombre>', methods=['GET'])
 def preguntar_por_voz(nombre):
     global df_inv
