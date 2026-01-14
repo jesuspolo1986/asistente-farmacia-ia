@@ -35,69 +35,54 @@ def home():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    global df_inv, mapa_columnas
+    global df_inv
     try:
         file = request.files['file']
-        # Cargamos el archivo ignorando errores de formato
-        if file.filename.endswith('.xlsx'):
-            df_inv = pd.read_excel(file, engine='openpyxl')
-        else:
+        if file.filename.endswith('.csv'):
             df_inv = pd.read_csv(file)
+        else:
+            df_inv = pd.read_excel(file, engine='openpyxl')
         
-        # --- LIMPIEZA PROFUNDA ---
-        # 1. Eliminamos filas que estén totalmente vacías
-        df_inv = df_inv.dropna(how='all')
-        
-        # 2. Si las columnas tienen nombres como "Unnamed", 
-        # intentamos usar la primera fila real como encabezado
-        if "Unnamed" in str(df_inv.columns):
-            df_inv.columns = df_inv.iloc[0]
-            df_inv = df_inv[1:]
-            
-        # 3. Normalizamos todo a texto para evitar errores de búsqueda
-        df_inv = df_inv.fillna("Desconocido")
-        
-        # 4. Mapeo inteligente
-        mapa_columnas = mapeo_universal(df_inv)
+        # --- EL TRUCO MAESTRO ---
+        # Convertimos TODO el dataframe a string y limpiamos espacios
+        df_inv = df_inv.astype(str).apply(lambda x: x.str.strip())
+        # Ponemos los nombres de las columnas en minúsculas para el sistema
+        df_inv.columns = df_inv.columns.str.strip().str.lower()
         
         return jsonify({"status": "Exitoso", "filas": len(df_inv)})
     except Exception as e:
-        print(f"Error fatal en carga: {e}")
-        return jsonify({"error": "Formato de archivo no compatible"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/preguntar/<nombre>', methods=['GET'])
 def preguntar_por_voz(nombre):
     global df_inv
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "Todavía no tengo el inventario. Por favor, súbelo."})
+        return jsonify({"respuesta_asistente": "Primero sube el inventario."})
     
     try:
-        # DEPURACIÓN: Forzamos que todo sea string y buscamos en TODO el dataframe
-        # Esto hace que el buscador sea 100% universal
-        mascara = df_inv.apply(lambda row: row.astype(str).str.contains(nombre, case=False).any(), axis=1)
+        # Buscamos en todas las columnas, ahora que todo es texto es imposible que falle
+        mascara = df_inv.apply(lambda row: row.str.contains(nombre, case=False).any(), axis=1)
         resultado = df_inv[mascara]
         
         if not resultado.empty:
-            # Convertimos a diccionario para que la IA lo entienda fácil
-            datos_encontrados = resultado.head(2).to_dict(orient='records')
-            contexto = f"Encontré estos datos: {datos_encontrados}"
+            # Convertimos a una lista simple de texto para Elena
+            datos = resultado.head(2).to_dict(orient='records')
+            contexto = f"Medicamentos encontrados: {datos}"
         else:
-            contexto = f"No encontré nada relacionado con {nombre}"
+            contexto = f"No tengo información sobre {nombre}."
 
-        # Configuración de voz de Elena
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
-                {"role": "system", "content": "Eres Elena. Responde por voz de forma muy breve. Di el nombre del producto, su precio y cuántos quedan. Sé muy clara."},
-                {"role": "user", "content": f"Datos del Excel: {contexto}\nPregunta del cliente: {nombre}"}
+                {"role": "system", "content": "Eres Elena. Responde por voz: di el nombre, el precio y el stock de forma muy breve."},
+                {"role": "user", "content": f"Datos: {contexto}. Pregunta: {nombre}"}
             ],
         )
         return jsonify({"respuesta_asistente": completion.choices[0].message.content})
-    
     except Exception as e:
-        # Si algo falla, imprimimos el error real en la consola de Render para verlo
-        print(f"Error real: {str(e)}")
-        return jsonify({"respuesta_asistente": "Hubo un pequeño error técnico al leer la fila. Intenta con otro nombre."})
+        # Log para que tú veas qué pasó en Render si algo falla
+        print(f"DEBUG: {e}")
+        return jsonify({"respuesta_asistente": "Perdón, tuve un error al procesar la fila."})
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
