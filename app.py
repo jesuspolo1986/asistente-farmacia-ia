@@ -38,21 +38,13 @@ def upload_file():
     global df_inv
     try:
         file = request.files['file']
-        if file.filename.endswith('.csv'):
-            df_inv = pd.read_csv(file)
-        else:
-            df_inv = pd.read_excel(file, engine='openpyxl')
-        
-        # --- EL TRUCO MAESTRO ---
-        # Convertimos TODO el dataframe a string y limpiamos espacios
-        df_inv = df_inv.astype(str).apply(lambda x: x.str.strip())
-        # Ponemos los nombres de las columnas en minúsculas para el sistema
-        df_inv.columns = df_inv.columns.str.strip().str.lower()
-        
-        return jsonify({"status": "Exitoso", "filas": len(df_inv)})
+        # Forzamos la lectura limpia
+        df_inv = pd.read_csv(file, skipinitialspace=True)
+        # Limpiamos los nombres de las columnas de cualquier espacio loco
+        df_inv.columns = df_inv.columns.str.strip() 
+        return jsonify({"status": "Exitoso", "columnas": list(df_inv.columns)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 @app.route('/preguntar/<nombre>', methods=['GET'])
 def preguntar_por_voz(nombre):
     global df_inv
