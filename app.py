@@ -8,74 +8,78 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Configuración Global de Consultoría
-inventario = {"df": None, "tasa": 55.40, "ultima_actualizacion": None}
+# Memoria del sistema
+inventario = {
+    "df": None, 
+    "tasa": 55.40, 
+    "ultima_actualizacion": "Pendiente de sincronizar"
+}
 
 def obtener_tasa_venezuela():
-    """Busca la tasa en tiempo real de EnParaleloVzla"""
-    ahora = datetime.now()
-    # Solo actualizamos si ha cambiado el día o si no tenemos tasa (Elena es eficiente)
+    """Consulta la API de monitoreo y actualiza la memoria del sistema"""
     try:
-        # Usamos una API pública para monitoreo de dólar en Venezuela
+        # API de monitoreo para Venezuela
         url = "https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=enparalelovzla"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=7)
         data = response.json()
         
-        # Extraemos el monitor principal
+        # Extraer precio de EnParaleloVzla
         nueva_tasa = float(data['monitors']['enparalelovzla']['price'])
         inventario["tasa"] = nueva_tasa
-        inventario["ultima_actualizacion"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+        inventario["ultima_actualizacion"] = datetime.now().strftime("%I:%M %p")
         return nueva_tasa
     except Exception as e:
-        print(f"Error consultando tasa: {e}")
+        print(f"Error de conexión a tasa: {e}")
         return inventario["tasa"]
 
 def buscar_analisis_senior(nombre_usuario):
     if inventario["df"] is None:
-        return "Elena: El sistema de inventario no ha sido cargado. Por favor, suministre el archivo Excel."
+        return "Elena: No he detectado el archivo de inventario. Por favor, cárguelo para proceder."
     
-    # Actualizar tasa automáticamente antes de cada consulta
+    # Actualizamos la tasa justo antes de responder para máxima precisión
     tasa = obtener_tasa_venezuela()
     
     productos = inventario["df"]['Producto'].astype(str).tolist()
     match = process.extractOne(nombre_usuario, productos, processor=utils.default_process)
     
-    # Nota de suscripción (Hoy 15 de enero)
-    nota = " [Suscripción: Día de Gracia Activo]."
+    # Mensaje de Día de Gracia (15 de enero)
+    nota_pago = " [Estatus: Día de Gracia Activo]."
 
     if match and match[1] > 70:
         fila = inventario["df"][inventario["df"]['Producto'] == match[0]].iloc[0]
         precio_usd = float(fila['Precio Venta'])
         precio_bs = precio_usd * tasa
         
-        # Lógica de Sugerencia (Cross-selling)
+        # Lógica de venta sugestiva (Upselling)
         sugerencia = ""
         tag = str(match[0]).lower()
         if "loratadina" in tag:
-            sugerencia = "Como experta, le recuerdo que la hidratación es vital en procesos alérgicos. "
-        elif "ibuprofeno" in tag:
-            sugerencia = "Sugiero acompañar con un protector gástrico para su seguridad. "
+            sugerencia = "Como observación senior, recuerde que la hidratación es clave en alergias. "
+        elif "amoxicilina" in tag:
+            sugerencia = "Dada la naturaleza del antibiótico, sugiero verificar si requiere probióticos. "
 
-        return (f"He auditado '{match[0]}'. Valor: {precio_usd} USD, equivalentes a {precio_bs:,.2f} Bolívares "
-                f"según la tasa monitor de {tasa}. {sugerencia}{nota}")
+        return (f"Análisis para {match[0]}: {precio_usd} USD. "
+                f"Al cambio actual de {tasa} BS, el total es {precio_bs:,.2f} Bolívares. "
+                f"{sugerencia}{nota_pago}")
     
-    return f"No localizo el activo '{nombre_usuario}' en los registros actuales.{nota}"
+    return f"No localizo '{nombre_usuario}' en la auditoría de stock actual.{nota_pago}"
 
 @app.route('/')
 def index():
-    tasa = obtener_tasa_venezuela() # Carga inicial
-    return render_template('index.html', tasa=tasa, fecha=inventario["ultima_actualizacion"])
+    # Al cargar la página, Elena busca la tasa de inmediato
+    tasa_hoy = obtener_tasa_venezuela()
+    return render_template('index.html', tasa=tasa_hoy, fecha=inventario["ultima_actualizacion"])
 
 @app.route('/upload', methods=['POST'])
 def upload():
     file = request.files.get('file')
-    if not file: return jsonify({"error": "No file"}), 400
+    if not file: return jsonify({"error": "Archivo no recibido"}), 400
     try:
         stream = io.BytesIO(file.read())
         df = pd.read_excel(stream) if file.filename.endswith(('.xlsx', '.xls')) else pd.read_csv(stream)
         df.columns = [str(c).strip().title() for c in df.columns]
         inventario["df"] = df
-        return jsonify({"success": True, "mensaje": f"Inventario sincronizado: {len(df)} productos."})
+        return jsonify({"success": True, "mensaje": f"Sincronización exitosa: {len(df)} activos registrados."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
