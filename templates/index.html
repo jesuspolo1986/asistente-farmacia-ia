@@ -3,204 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elena AI - Pro Analyst Farmacia</title>
+    <title>Elena AI - Consultora Senior de Farmacia</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
     <style>
         body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        
-        /* Banner de Suscripción / Día de Gracia */
-        .subscription-banner {
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 10px;
-            text-align: center;
-            border-bottom: 2px solid #ffeeba;
-            font-weight: bold;
-        }
-
-        .main-card {
-            border: none;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-
-        /* Área de Carga de Récipes */
-        .upload-container {
-            background: #ffffff;
-            border: 2px dashed #007bff;
-            border-radius: 15px;
-            padding: 40px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
-        .upload-container:hover {
-            background: #f0f7ff;
-            border-color: #0056b3;
-        }
-        .upload-icon { font-size: 50px; color: #007bff; }
-        
-        #preview-image {
-            max-width: 100%;
-            max-height: 250px;
-            border-radius: 10px;
-            margin-top: 15px;
-            display: none;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
-
-        .btn-analizar {
-            background: linear-gradient(45deg, #28a745, #218838);
-            color: white;
-            border: none;
-            padding: 15px;
-            border-radius: 10px;
-            font-weight: bold;
-            width: 100%;
-            transition: 0.3s;
-        }
-        .btn-analizar:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4); }
-        .btn-analizar:disabled { background: #6c757d; transform: none; }
-
-        /* Historial de Respuestas */
-        .chat-box {
-            height: 300px;
-            overflow-y: auto;
-            background: white;
-            border-radius: 10px;
-            padding: 15px;
-            border: 1px solid #dee2e6;
-        }
+        .chat-container { max-width: 600px; margin: 50px auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .elena-avatar { width: 60px; height: 60px; background: #007bff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-bottom: 20px; }
+        .btn-mic { background-color: #dc3545; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; transition: transform 0.2s; }
+        .btn-mic:active { transform: scale(0.9); }
     </style>
 </head>
 <body>
 
-<div class="subscription-banner">
-    <i class="fas fa-exclamation-triangle"></i> 
-    Tu suscripción expiró el 14 de enero. Hoy es tu <strong>Día de Gracia</strong>. Regulariza tu pago para mantener el servicio.
-</div>
-
-<nav class="navbar navbar-dark bg-primary mb-4">
-    <div class="container">
-        <span class="navbar-brand mb-0 h1"><i class="fas fa-robot"></i> ELENA | AI Pro Analyst</span>
-        <span class="text-white small">Módulo: Farmacia & Finanzas</span>
-    </div>
-</nav>
-
 <div class="container">
-    <div class="row">
-        <div class="col-lg-6 mb-4">
-            <div class="card main-card p-4">
-                <h4 class="text-primary mb-3"><i class="fas fa-camera"></i> Escanear Récipe Médico</h4>
-                <p class="text-muted">Sube una foto de la receta (impresa o manual) para consultar disponibilidad y precio.</p>
-                
-                <div class="upload-container" onclick="document.getElementById('recipe-upload').click()">
-                    <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
-                    <p id="upload-text" class="mt-2">Haz clic para seleccionar o arrastra la imagen aquí</p>
-                    <input type="file" id="recipe-upload" accept="image/*" style="display: none;" onchange="previewFile()">
-                    <center><img id="preview-image" src="#" alt="Vista previa"></center>
-                </div>
+    <div class="chat-container">
+        <div class="d-flex align-items-center">
+            <div class="elena-avatar">AI</div>
+            <h3 class="ms-3">Elena: Asistente Senior</h3>
+        </div>
+        
+        <div class="mb-4">
+            <label class="form-label">1. Cargar Inventario (Excel/CSV)</label>
+            <input type="file" id="fileInput" class="form-control" accept=".xlsx, .xls, .csv">
+            <button onclick="uploadFile()" class="btn btn-primary mt-2 w-100">Cargar Datos</button>
+        </div>
 
-                <button id="btn-scan" class="btn-analizar" onclick="subirReceta()" disabled>
-                    <i class="fas fa-magic"></i> ANALIZAR CON ELENA
-                </button>
-                
-                <div id="status-area" class="mt-3 text-center fw-bold"></div>
+        <hr>
+
+        <div class="mb-3">
+            <label class="form-label">2. Consultar Producto</label>
+            <div class="input-group">
+                <input type="text" id="preguntaInput" class="form-control" placeholder="Ej: Atorvastatina 20mg">
+                <button onclick="enviarPregunta()" class="btn btn-success">Consultar</button>
+                <button onclick="activarMicrofono()" class="btn-mic ms-2">🎤</button>
             </div>
         </div>
 
-        <div class="col-lg-6">
-            <div class="card main-card p-4">
-                <h4 class="text-success mb-3"><i class="fas fa-comment-dots"></i> Asistente Elena</h4>
-                <div id="chat-box" class="chat-box mb-3">
-                    <p class="text-muted italic">Esperando interacción...</p>
-                </div>
-                
-                <audio id="audio-player" controls class="w-100" style="display:none;"></audio>
-                
-                <div class="mt-3">
-                    <button class="btn btn-outline-primary btn-sm w-100" onclick="location.reload()">
-                        <i class="fas fa-sync"></i> Nueva Consulta
-                    </button>
-                </div>
-            </div>
+        <div id="status" class="alert alert-info d-none"></div>
+        <div id="respuesta" class="p-3 border rounded bg-light mt-3" style="min-height: 50px; color: #333;">
+            Esperando consulta...
         </div>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    // 1. Previsualización de la imagen
-    function previewFile() {
-        const preview = document.getElementById('preview-image');
-        const file = document.getElementById('recipe-upload').files[0];
-        const text = document.getElementById('upload-text');
-        const btn = document.getElementById('btn-scan');
-        const reader = new FileReader();
-
-        reader.onloadend = function () {
-            preview.src = reader.result;
-            preview.style.display = "block";
-            text.innerText = "Archivo: " + file.name;
-            btn.disabled = false;
-        }
-
-        if (file) {
-            reader.readAsDataURL(file);
-        }
+    // --- MOTOR DE VOZ (LECTURA) ---
+    function hablar(texto) {
+        const synth = window.speechSynthesis;
+        const utterance = new SpeechSynthesisUtterance(texto);
+        utterance.lang = 'es-ES'; // Voz en español
+        utterance.pitch = 1.1;    // Tono ligeramente femenino
+        utterance.rate = 1.0;     // Velocidad normal
+        synth.speak(utterance);
     }
 
-    // 2. Envío al Backend (Flask)
-    async function subirReceta() {
-        const fileInput = document.getElementById('recipe-upload');
-        const statusArea = document.getElementById('status-area');
-        const btn = document.getElementById('btn-scan');
-        const chatBox = document.getElementById('chat-box');
+    // --- RECONOCIMIENTO DE VOZ (DICTADO) ---
+    function activarMicrofono() {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'es-ES';
         
-        if (!fileInput.files[0]) return;
+        recognition.onstart = () => {
+            document.getElementById('status').classList.remove('d-none');
+            document.getElementById('status').innerText = "Escuchando...";
+        };
 
-        const formData = new FormData();
-        formData.append('receta', fileInput.files[0]);
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById('preguntaInput').value = transcript;
+            enviarPregunta();
+        };
 
-        // Feedback visual
-        btn.disabled = true;
-        statusArea.innerHTML = `<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Elena está leyendo el récipe...</span>`;
+        recognition.onend = () => {
+            document.getElementById('status').classList.add('d-none');
+        };
 
-        try {
-            const response = await fetch('/escanear-receta', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
-
-            statusArea.innerHTML = `<span class="text-success fw-bold">✓ Análisis Exitoso</span>`;
-            
-            // Agregar al chat
-            chatBox.innerHTML += `<div><strong>Elena:</strong> ${data.respuesta_asistente}</div><hr>`;
-            chatBox.scrollTop = chatBox.scrollHeight;
-
-            // Reproducir respuesta de voz (Edge-TTS)
-            reproducirVoz(data.respuesta_asistente);
-
-        } catch (error) {
-            statusArea.innerHTML = `<span class="text-danger">Error conectando con el servidor</span>`;
-            console.error(error);
-        } finally {
-            btn.disabled = false;
-        }
+        recognition.start();
     }
 
-    // 3. Función de Voz (Integrada con tu backend)
-    function reproducirVoz(texto) {
-        // Suponiendo que tu endpoint de voz es '/get-audio?text=...'
-        const audio = document.getElementById('audio-player');
-        audio.src = `/get-audio?text=${encodeURIComponent(texto)}`;
-        audio.style.display = "block";
-        audio.play();
+    // --- COMUNICACIÓN CON EL SERVIDOR (KOYEB) ---
+    async function uploadFile() {
+        const file = document.getElementById('fileInput').files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        alert(data.mensaje || data.error);
+    }
+
+    async function enviarPregunta() {
+        const pregunta = document.getElementById('preguntaInput').value;
+        const res = await fetch('/preguntar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pregunta: pregunta })
+        });
+        const data = await res.json();
+        
+        // Actualizar interfaz
+        document.getElementById('respuesta').innerText = data.respuesta_asistente;
+        
+        // ¡ELENA HABLA!
+        hablar(data.respuesta_asistente);
     }
 </script>
 
