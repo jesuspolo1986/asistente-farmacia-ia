@@ -1,6 +1,6 @@
 flask
 pandas
 openpyxl
-mistralai
 rapidfuzz
 python-dotenv
+gunicorn
