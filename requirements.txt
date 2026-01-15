@@ -3,6 +3,4 @@ pandas
 openpyxl
 mistralai
 rapidfuzz
-matplotlib
-werkzeug
 python-dotenv
