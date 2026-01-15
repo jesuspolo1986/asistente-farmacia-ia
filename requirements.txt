@@ -1,13 +1,8 @@
---find-links https://download.pytorch.org/whl/torch_stable.html
-torch==2.2.1+cpu
-torchvision==0.17.1+cpu
-numpy<2.0.0
-matplotlib
 flask
 pandas
 openpyxl
 mistralai
-easyocr
 rapidfuzz
-opencv-python-headless
+matplotlib
 werkzeug
+python-dotenv
