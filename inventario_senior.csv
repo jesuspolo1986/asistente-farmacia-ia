@@ -1,0 +1,12 @@
+Código,Producto,Descripción,Categoría,Costo,Precio Venta,Stock Actual,Stock Mínimo,Vencimiento,Ubicación
+1001,Paracetamol 500mg,Analgésico genérico,Venta Libre,0.80,2.50,150,50,2026-12-01,Estante A1
+1002,Paracetamol Jarabe,Infantil 120mg/5ml,Pediatría,4.20,8.75,15,20,2026-05-15,Nevera 1
+2001,Loratadina 10mg,Antihistamínico,Alergias,1.50,5.20,200,40,2027-01-20,Estante B2
+3005,Amoxicilina 850mg,Antibiótico cápsulas,Recetados,5.00,12.00,45,15,2026-01-14,Estante C3
+3006,Amoxicilina + Ácido C.,Antibiótico reforzado,Recetados,11.00,22.50,8,10,2026-03-10,Estante C3
+4001,Alcohol Etílico 70%,Desinfectante 500ml,Primeros Auxilios,1.10,3.15,60,20,2028-10-12,Depósito
+5002,Ibuprofeno 600mg,Antiinflamatorio,Venta Libre,1.80,4.90,120,30,2026-11-30,Estante A2
+6001,Insulina Glargina,Análogo de insulina,Diabetes,25.00,45.00,5,10,2026-02-15,Nevera 1
+7001,Alprazolam 0.5mg,Psicotrópico Controlado,Controlados,2.00,7.50,50,10,2027-08-10,Caja Fuerte
+8001,Losartán Potásico 50mg,Antihipertensivo,Crónicos,1.20,4.80,10,25,2026-01-20,Estante D1
+9001,Vitamina C 1g,Suplemento efervescente,Vitaminas,3.50,9.00,100,20,2025-12-20,Estante B1
