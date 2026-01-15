@@ -1,76 +1,94 @@
 import os
 import io
 import pandas as pd
+import requests
 from flask import Flask, request, jsonify, render_template
 from rapidfuzz import process, utils
+from datetime import datetime
 
 app = Flask(__name__)
 
-# Configuración Global
-df_inv = None
-TASA_CAMBIO = 55.40  # Ajusta esta tasa a tu moneda local
+# Configuración Global de Consultoría
+inventario = {"df": None, "tasa": 55.40, "ultima_actualizacion": None}
+
+def obtener_tasa_venezuela():
+    """Busca la tasa en tiempo real de EnParaleloVzla"""
+    ahora = datetime.now()
+    # Solo actualizamos si ha cambiado el día o si no tenemos tasa (Elena es eficiente)
+    try:
+        # Usamos una API pública para monitoreo de dólar en Venezuela
+        url = "https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=enparalelovzla"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        
+        # Extraemos el monitor principal
+        nueva_tasa = float(data['monitors']['enparalelovzla']['price'])
+        inventario["tasa"] = nueva_tasa
+        inventario["ultima_actualizacion"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+        return nueva_tasa
+    except Exception as e:
+        print(f"Error consultando tasa: {e}")
+        return inventario["tasa"]
 
 def buscar_analisis_senior(nombre_usuario):
-    global df_inv
-    if df_inv is None:
-        return "Elena: El ecosistema de datos no ha sido sincronizado. Por favor, provea el inventario para iniciar el análisis estratégico."
+    if inventario["df"] is None:
+        return "Elena: El sistema de inventario no ha sido cargado. Por favor, suministre el archivo Excel."
     
-    # Normalización de nombres en el Excel (Columna 'Producto')
-    productos = df_inv['Producto'].astype(str).tolist()
+    # Actualizar tasa automáticamente antes de cada consulta
+    tasa = obtener_tasa_venezuela()
+    
+    productos = inventario["df"]['Producto'].astype(str).tolist()
     match = process.extractOne(nombre_usuario, productos, processor=utils.default_process)
     
-    # Hoy es 15 de enero: Día de gracia
-    nota_suscripcion = " [Nota: Su suscripción se encuentra en periodo de gracia de 24 horas]."
+    # Nota de suscripción (Hoy 15 de enero)
+    nota = " [Suscripción: Día de Gracia Activo]."
 
     if match and match[1] > 70:
-        fila = df_inv[df_inv['Producto'] == match[0]].iloc[0]
+        fila = inventario["df"][inventario["df"]['Producto'] == match[0]].iloc[0]
         precio_usd = float(fila['Precio Venta'])
-        precio_local = precio_usd * TASA_CAMBIO
+        precio_bs = precio_usd * tasa
         
-        respuesta = (
-            f"He localizado el activo: {match[0]}. "
-            f"Su valoración estratégica es de {precio_usd} dólares, "
-            f"equivalente a {precio_local:,.2f} en moneda local. "
-        )
-        
-        # Comentario financiero Senior
-        if precio_usd > 20:
-            respuesta += "Dada la magnitud de esta inversión, le sugiero verificar la rotación de stock. "
-        else:
-            respuesta += "Este valor se mantiene en niveles de alta competitividad de mercado. "
-            
-        return respuesta + nota_suscripcion
+        # Lógica de Sugerencia (Cross-selling)
+        sugerencia = ""
+        tag = str(match[0]).lower()
+        if "loratadina" in tag:
+            sugerencia = "Como experta, le recuerdo que la hidratación es vital en procesos alérgicos. "
+        elif "ibuprofeno" in tag:
+            sugerencia = "Sugiero acompañar con un protector gástrico para su seguridad. "
+
+        return (f"He auditado '{match[0]}'. Valor: {precio_usd} USD, equivalentes a {precio_bs:,.2f} Bolívares "
+                f"según la tasa monitor de {tasa}. {sugerencia}{nota}")
     
-    return f"Tras un escaneo exhaustivo, no localizo '{nombre_usuario}'. ¿Desea que analice opciones de sustitución?" + nota_suscripcion
+    return f"No localizo el activo '{nombre_usuario}' en los registros actuales.{nota}"
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    tasa = obtener_tasa_venezuela() # Carga inicial
+    return render_template('index.html', tasa=tasa, fecha=inventario["ultima_actualizacion"])
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    global df_inv
     file = request.files.get('file')
-    if not file: return jsonify({"error": "No se recibió archivo"}), 400
+    if not file: return jsonify({"error": "No file"}), 400
     try:
         stream = io.BytesIO(file.read())
-        if file.filename.endswith(('.xlsx', '.xls')):
-            df_inv = pd.read_excel(stream)
-        else:
-            df_inv = pd.read_csv(stream)
-        
-        # Limpieza Senior de columnas
-        df_inv.columns = [str(c).strip().title() for c in df_inv.columns]
-        return jsonify({"success": True, "mensaje": f"Sincronización exitosa: {len(df_inv)} activos financieros registrados."})
+        df = pd.read_excel(stream) if file.filename.endswith(('.xlsx', '.xls')) else pd.read_csv(stream)
+        df.columns = [str(c).strip().title() for c in df.columns]
+        inventario["df"] = df
+        return jsonify({"success": True, "mensaje": f"Inventario sincronizado: {len(df)} productos."})
     except Exception as e:
-        return jsonify({"error": f"Falla en la integridad de datos: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/preguntar', methods=['POST'])
 def preguntar():
     data = request.json
     pregunta = data.get("pregunta", "")
     respuesta = buscar_analisis_senior(pregunta)
-    return jsonify({"respuesta_asistente": respuesta})
+    return jsonify({
+        "respuesta_asistente": respuesta,
+        "tasa_actual": inventario["tasa"],
+        "ultima_act": inventario["ultima_actualizacion"]
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))

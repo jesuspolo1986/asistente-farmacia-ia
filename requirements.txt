@@ -4,3 +4,4 @@ openpyxl
 rapidfuzz
 python-dotenv
 gunicorn
+requests

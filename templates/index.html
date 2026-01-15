@@ -10,31 +10,45 @@
         :root { --primary: #1a1c23; --accent: #007aff; --danger: #ff3b30; }
         body { background: #f0f2f5; font-family: 'Inter', sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
         .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(15px); border-radius: 30px; padding: 2.5rem; width: 90%; max-width: 450px; box-shadow: 0 25px 50px rgba(0,0,0,0.15); text-align: center; border: 1px solid white; }
-        .mic-btn { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--accent); color: white; font-size: 2.5rem; margin: 1.5rem 0; cursor: pointer; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 20px rgba(0, 122, 255, 0.4); }
+        
+        /* Indicador de Tasa Senior */
+        .tasa-badge { background: #e9ecef; border-radius: 12px; padding: 6px 12px; display: inline-block; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem; color: #495057; border: 1px solid #dee2e6; }
+        
+        .mic-btn { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--accent); color: white; font-size: 2.5rem; margin: 1rem 0; cursor: pointer; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 20px rgba(0, 122, 255, 0.4); }
         .mic-btn.listening { background: var(--danger); animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
+        
         .response-text { min-height: 100px; color: var(--primary); font-size: 1.15rem; line-height: 1.5; margin-top: 1rem; font-weight: 400; padding: 10px; }
         .status-dot { width: 10px; height: 10px; background: #28a745; border-radius: 50%; display: inline-block; margin-right: 8px; animation: blink 2s infinite; }
         @keyframes blink { 50% { opacity: 0.5; } }
+        
+        .whatsapp-btn { background: #25d366; color: white; border-radius: 15px; padding: 12px; text-decoration: none; display: none; font-weight: 600; margin-top: 15px; transition: 0.3s; border: none; width: 100%; }
+        .whatsapp-btn:hover { background: #128c7e; color: white; }
         .file-upload { font-size: 0.85rem; color: #666; text-decoration: none; display: block; margin-top: 1.5rem; transition: 0.3s; }
-        .file-upload:hover { color: var(--accent); }
     </style>
 </head>
 <body>
 
 <div class="glass-card">
+    <div class="tasa-badge">
+        📈 Monitor: <span id="valTasa">--.--</span> BS | <small id="valFecha">Sincronizando...</small>
+    </div>
+
     <div class="d-flex justify-content-center align-items-center mb-1">
         <span class="status-dot"></span>
-        <span class="small fw-bold text-uppercase opacity-75">Sincronizado</span>
+        <span class="small fw-bold text-uppercase opacity-75">Elena Online</span>
     </div>
-    <h2 class="fw-600 mb-0">Elena AI</h2>
-    <p class="text-muted small">Consultoría Senior de Farmacia</p>
+    <h2 class="fw-600 mb-0">Asistente Senior</h2>
 
     <button class="mic-btn" id="micBtn" onclick="toggleListening()">🎤</button>
     
     <div class="response-text" id="elenaResponse">
         "Bienvenido. Presione el icono para iniciar la consulta por voz."
     </div>
+
+    <a href="javascript:void(0)" id="waBtn" class="whatsapp-btn" onclick="enviarWA()">
+        📱 Enviar Presupuesto al Cliente
+    </a>
 
     <input type="text" id="manualInput" class="form-control form-control-sm mt-3 border-0 bg-light text-center" placeholder="O escriba el nombre aquí..." onkeypress="handleKey(event)">
 
@@ -44,27 +58,26 @@
 
 <script>
     const synth = window.speechSynthesis;
-    let isListening = false;
+    let ultimaRespuesta = "";
 
     function hablar(texto) {
         synth.cancel();
         const utterance = new SpeechSynthesisUtterance(texto);
-        utterance.lang = 'es-MX'; // Voz profesional
-        utterance.rate = 0.9;     // Velocidad pausada
-        utterance.pitch = 0.85;   // Tono serio y senior
+        utterance.lang = 'es-MX';
+        utterance.rate = 0.9;
+        utterance.pitch = 0.85;
         synth.speak(utterance);
     }
 
     function toggleListening() {
-        const btn = document.getElementById('micBtn');
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return alert("Su navegador no soporta reconocimiento de voz.");
+        if (!SpeechRecognition) return alert("Navegador no compatible.");
         
         const recognition = new SpeechRecognition();
         recognition.lang = 'es-ES';
         
-        recognition.onstart = () => { btn.classList.add('listening'); isListening = true; };
-        recognition.onend = () => { btn.classList.remove('listening'); isListening = false; };
+        recognition.onstart = () => document.getElementById('micBtn').classList.add('listening');
+        recognition.onend = () => document.getElementById('micBtn').classList.remove('listening');
         recognition.onresult = (e) => {
             const query = e.results[0][0].transcript;
             document.getElementById('manualInput').value = query;
@@ -75,7 +88,9 @@
 
     async function solicitarAnalisis(query) {
         const responseDiv = document.getElementById('elenaResponse');
-        responseDiv.innerHTML = "<em>Procesando datos financieros...</em>";
+        const waBtn = document.getElementById('waBtn');
+        responseDiv.innerHTML = "<em>Procesando datos y tasa...</em>";
+        
         try {
             const res = await fetch('/preguntar', {
                 method: 'POST',
@@ -83,9 +98,22 @@
                 body: JSON.stringify({ pregunta: query })
             });
             const data = await res.json();
-            responseDiv.innerText = data.respuesta_asistente;
-            hablar(data.respuesta_asistente);
+            
+            ultimaRespuesta = data.respuesta_asistente;
+            responseDiv.innerText = ultimaRespuesta;
+            
+            // Actualizar indicadores de tasa en la UI
+            document.getElementById('valTasa').innerText = data.tasa_actual;
+            document.getElementById('valFecha').innerText = data.ultima_act;
+            
+            hablar(ultimaRespuesta);
+            waBtn.style.display = 'block'; // Mostrar botón de WhatsApp
         } catch (e) { responseDiv.innerText = "Error en la conexión estratégica."; }
+    }
+
+    function enviarWA() {
+        const msg = encodeURIComponent("📦 *Cotización Farmacia - Elena AI*\n\n" + ultimaRespuesta);
+        window.open(`https://wa.me/?text=${msg}`, '_blank');
     }
 
     function handleKey(e) { if (e.key === 'Enter') solicitarAnalisis(e.target.value); }
@@ -99,7 +127,6 @@
         alert(data.mensaje || data.error);
     }
 
-    // Saludo inicial de cortesía (15 de enero)
     window.onload = () => {
         setTimeout(() => {
             hablar("Soy Elena, su consultora senior. Hoy 15 de enero, operamos con acceso de cortesía. ¿Qué producto desea cotizar?");
