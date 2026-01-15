@@ -3,17 +3,17 @@ import io
 import pandas as pd
 from flask import Flask, request, jsonify, render_template
 from rapidfuzz import process, utils
-import re # Para limpiar la pregunta
+from datetime import datetime
 
 app = Flask(__name__)
 inventario = {"df": None, "tasa": 55.40}
 
 def limpiar_pregunta(texto):
-    """Elimina frases comunes para dejar solo el nombre del producto"""
     texto = texto.lower()
+    # Añadimos más frases para que el usuario pueda hablar con total libertad
     frases_a_quitar = [
         "cuanto cuesta", "dame el precio de", "precio de", "precio del",
-        "cuanto vale", "en cuanto esta", "tienes", "hablar de", "buscame"
+        "cuanto vale", "en cuanto esta", "tienes", "buscame", "dame el costo de"
     ]
     for frase in frases_a_quitar:
         texto = texto.replace(frase, "")
@@ -21,46 +21,48 @@ def limpiar_pregunta(texto):
 
 def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
     if inventario["df"] is None:
-        return "Elena: No he detectado el archivo de inventario. Por favor, cárguelo."
+        return "Elena: El inventario no ha sido cargado."
     
     tasa = float(tasa_recibida)
     inventario["tasa"] = tasa 
-
-    # Limpiamos la pregunta para que Elena entienda: "¿Cuánto cuesta la Loratadina?" -> "Loratadina"
     producto_buscado = limpiar_pregunta(pregunta_original)
     
     productos = inventario["df"]['Producto'].astype(str).tolist()
     match = process.extractOne(producto_buscado, productos, processor=utils.default_process)
     
-    nota = " [Nota: Suscripción en Gracia]."
-
-    if match and match[1] > 60: # Bajamos un poco el umbral para ser más flexibles
+    if match and match[1] > 60:
         fila = inventario["df"][inventario["df"]['Producto'] == match[0]].iloc[0]
         precio_usd = float(fila['Precio Venta'])
         precio_bs = precio_usd * tasa
         
+        # Lógica de Vencimiento
+        venc_str = str(fila['Vencimiento'])
+        try:
+            fecha_venc = datetime.strptime(venc_str, '%Y-%m-%d')
+            hoy = datetime.now()
+            esta_vencido = fecha_venc < hoy
+        except:
+            esta_vencido = False
+
         if not modo_admin:
-            # MODO PÚBLICO: Solo precio y salud
+            if esta_vencido:
+                return f"El activo {match[0]} no está disponible para la venta en este momento por protocolos de seguridad."
             return (f"El activo {match[0]} tiene un valor de {precio_usd} USD, "
                     f"equivalente a {precio_bs:,.2f} Bolívares. ¿Desea que se lo reserve?")
         else:
-            # MODO ADMINISTRATIVO: Reporte Técnico Exhaustivo
             stock = int(fila['Stock Actual'])
             minimo = int(fila['Stock Mínimo'])
-            ubi = fila['Ubicación']
-            vence = fila['Vencimiento']
-            alerta = "🚨 RECOMPRA INMEDIATA" if stock <= minimo else "✅ NIVEL ÓPTIMO"
+            alerta_stock = "🚨 RECOMPRA URGENTE" if stock <= minimo else "✅ NIVEL ÓPTIMO"
+            alerta_venc = "⚠️ ¡PRODUCTO VENCIDO! RETIRAR DE ESTANTE" if esta_vencido else "✅ Vigente"
             
-            # Aquí forzamos que Elena responda como jefa de inventario
-            return (f"REPORTE DE AUDITORÍA: {match[0]}. "
-                    f"Costo en sistema: {precio_usd} USD ({precio_bs:,.2f} BS). "
-                    f"Existencia real: {stock} unidades. Mínimo requerido: {minimo}. "
-                    f"Estado: {alerta}. Ubicación física: {ubi}. Vencimiento: {vence}.{nota}")
+            return (f"REPORTE ADMIN: {match[0]}. "
+                    f"Costo: {precio_bs:,.2f} BS ({precio_usd} USD). "
+                    f"Stock: {stock} (Mín: {minimo}). {alerta_stock}. "
+                    f"Estado Sanitario: {alerta_venc}. Ubicación: {fila['Ubicación']}.")
     
-    return f"No logré identificar el producto '{producto_buscado}' en el inventario actual.{nota}"
+    return f"No logré identificar '{producto_buscado}' en el inventario actual."
 
-# ... (Resto de las rutas /index, /upload, /preguntar igual que el anterior) ...
-
+# ... (Mismas rutas @app.route para upload y preguntar) ...
 @app.route('/')
 def index():
     return render_template('index.html', tasa=inventario["tasa"])
@@ -74,7 +76,7 @@ def upload():
         df = pd.read_excel(stream) if file.filename.endswith(('.xlsx', '.xls')) else pd.read_csv(stream)
         df.columns = [str(c).strip().title() for c in df.columns]
         inventario["df"] = df
-        return jsonify({"success": True, "mensaje": f"Base de datos lista: {len(df)} productos."})
+        return jsonify({"success": True, "mensaje": f"Sincronizado: {len(df)} productos."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

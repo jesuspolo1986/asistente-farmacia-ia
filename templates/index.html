@@ -3,34 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elena AI | Dual Mode</title>
+    <title>Elena AI | Dual Control</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root { --accent: #007aff; --admin: #5856d6; --bg: #f2f2f7; }
-        body { background: var(--bg); font-family: 'Inter', sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
-        .glass-card { background: white; border-radius: 35px; padding: 2rem; width: 90%; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center; }
+        body { background: var(--bg); font-family: 'Inter', sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; overflow: hidden; }
         
-        .mode-switch { background: #f8f9fa; border-radius: 20px; padding: 15px; margin-bottom: 20px; border: 1px solid #eee; }
-        .tasa-input { max-width: 100px; text-align: center; font-weight: 600; color: var(--accent); border: 2px solid #eee; border-radius: 10px; }
+        .glass-card { background: white; border-radius: 35px; padding: 2rem; width: 95%; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center; border: 1px solid rgba(255,255,255,0.8); }
         
-        .mic-btn { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--accent); color: white; font-size: 2.5rem; margin: 15px 0; cursor: pointer; transition: 0.3s; box-shadow: 0 10px 20px rgba(0,122,255,0.3); }
-        .mic-btn.admin-on { background: var(--admin); box-shadow: 0 10px 20px rgba(88, 86, 214, 0.3); }
+        /* Panel de Control Superior */
+        .mode-switch { background: #f8f9fa; border-radius: 20px; padding: 15px; margin-bottom: 20px; border: 1px solid #eee; transition: 0.3s; }
+        .mode-switch.admin-active { border-color: var(--admin); background: #f0f0ff; }
+        
+        .tasa-input { max-width: 110px; text-align: center; font-weight: 700; color: var(--accent); border: 2px solid #eee; border-radius: 10px; font-size: 1.1rem; }
+        
+        /* Botón de Micrófono */
+        .mic-btn { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--accent); color: white; font-size: 2.5rem; margin: 15px 0; cursor: pointer; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 20px rgba(0,122,255,0.3); }
+        .mic-btn.admin-on { background: var(--admin); box-shadow: 0 10px 20px rgba(88, 86, 214, 0.3); transform: scale(1.05); }
         .mic-btn.listening { background: #ff3b30; animation: pulse 1.5s infinite; }
         
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 20px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
         
-        .response-text { min-height: 100px; font-size: 1.1rem; color: #1c1c1e; margin: 10px 0; line-height: 1.4; }
-        .wa-btn { background: #25d366; color: white; border-radius: 14px; padding: 12px; text-decoration: none; display: none; width: 100%; font-weight: 600; border: none; }
+        /* Área de Respuesta */
+        .response-container { min-height: 120px; margin: 15px 0; display: flex; align-items: center; justify-content: center; }
+        .response-text { font-size: 1.05rem; color: #1c1c1e; line-height: 1.5; transition: 0.3s; width: 100%; }
+        .admin-style { text-align: left; font-size: 0.9rem; border-left: 4px solid var(--admin); padding-left: 12px; color: #3a3a3c; }
+        
+        .wa-btn { background: #25d366; color: white; border-radius: 16px; padding: 14px; text-decoration: none; display: none; width: 100%; font-weight: 600; border: none; margin-top: 10px; transition: 0.2s; }
+        .wa-btn:hover { background: #128c7e; transform: translateY(-2px); }
+        
+        .form-control-sm { border-radius: 10px; padding: 10px; }
+        .small-link { font-size: 0.75rem; color: #8e8e93; text-decoration: none; transition: 0.2s; }
+        .small-link:hover { color: var(--accent); }
     </style>
 </head>
 <body>
 
 <div class="glass-card">
-    <div class="mode-switch">
+    <div class="mode-switch" id="uiPanel">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <span class="small fw-bold text-muted">TASA BS</span>
-            <input type="number" id="tasaManual" class="tasa-input" value="{{ tasa }}" step="0.1">
+            <input type="number" id="tasaManual" class="tasa-input" value="{{ tasa }}" step="0.01">
         </div>
         <div class="form-check form-switch d-flex justify-content-center">
             <input class="form-check-input me-2" type="checkbox" id="adminToggle" onchange="updateUI()">
@@ -38,21 +52,23 @@
         </div>
     </div>
 
-    <h3 class="fw-600 mb-0">Elena AI</h3>
-    <p class="text-muted small" id="subLabel">Consultoría Senior</p>
+    <h3 class="fw-600 mb-0" id="mainTitle">Elena AI</h3>
+    <p class="text-muted small mb-1" id="subLabel">Consultoría Senior</p>
 
     <button class="mic-btn" id="micBtn" onclick="toggleListening()">🎤</button>
     
-    <div class="response-text" id="elenaResponse">
-        "Lista para iniciar. Presione el micrófono."
+    <div class="response-container">
+        <div class="response-text" id="elenaResponse">
+            "Bienvenido. Presione el icono para iniciar la consulta por voz."
+        </div>
     </div>
 
-    <button id="waBtn" class="wa-btn" onclick="enviarWA()">📱 Enviar Presupuesto</button>
+    <button id="waBtn" class="wa-btn" onclick="enviarWA()">📱 Enviar Presupuesto al Cliente</button>
 
-    <input type="text" id="manualInput" class="form-control form-control-sm mt-3 border-0 bg-light text-center" placeholder="O escriba aquí..." onkeypress="handleKey(event)">
+    <input type="text" id="manualInput" class="form-control form-control-sm mt-3 border-0 bg-light text-center" placeholder="O escriba el nombre aquí..." onkeypress="handleKey(event)">
     
     <input type="file" id="inventoryFile" hidden onchange="processUpload()">
-    <a href="javascript:void(0)" class="d-block mt-4 small text-muted text-decoration-none opacity-50" onclick="document.getElementById('inventoryFile').click()">📊 Cargar Base de Datos</a>
+    <a href="javascript:void(0)" class="small-link d-block mt-4" onclick="document.getElementById('inventoryFile').click()">📊 Sincronizar Base de Datos</a>
 </div>
 
 <script>
@@ -60,24 +76,30 @@
     let ultimaRespuesta = "";
 
     function hablar(texto) {
+        if (!texto) return;
         synth.cancel();
         const u = new SpeechSynthesisUtterance(texto);
-        u.lang = 'es-MX'; u.rate = 0.95; u.pitch = 0.9;
+        u.lang = 'es-MX'; 
+        u.rate = 0.95; 
+        u.pitch = 0.9;
         synth.speak(u);
     }
 
     function updateUI() {
         const isAdmin = document.getElementById('adminToggle').checked;
+        const panel = document.getElementById('uiPanel');
         const label = document.getElementById('modeLabel');
         const mic = document.getElementById('micBtn');
         const sub = document.getElementById('subLabel');
         
         if(isAdmin) {
+            panel.classList.add('admin-active');
             label.innerText = "MODO ADMINISTRATIVO";
             label.style.color = "var(--admin)";
             mic.classList.add('admin-on');
             sub.innerText = "Gestión de Inventario Interno";
         } else {
+            panel.classList.remove('admin-active');
             label.innerText = "ATENCIÓN PÚBLICO";
             label.style.color = "gray";
             mic.classList.remove('admin-on');
@@ -86,15 +108,30 @@
     }
 
     function toggleListening() {
-        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Su navegador no soporta voz. Use el teclado.");
+            return;
+        }
+        
+        const recognition = new SpeechRecognition();
         recognition.lang = 'es-ES';
-        recognition.onstart = () => document.getElementById('micBtn').classList.add('listening');
-        recognition.onend = () => document.getElementById('micBtn').classList.remove('listening');
+        
+        recognition.onstart = () => {
+            document.getElementById('micBtn').classList.add('listening');
+            document.getElementById('elenaResponse').innerText = "Elena escuchando...";
+        };
+        
+        recognition.onend = () => {
+            document.getElementById('micBtn').classList.remove('listening');
+        };
+        
         recognition.onresult = (e) => {
             const query = e.results[0][0].transcript;
             document.getElementById('manualInput').value = query;
             solicitarAnalisis(query);
         };
+        
         recognition.start();
     }
 
@@ -103,7 +140,7 @@
         const tasaVal = document.getElementById('tasaManual').value;
         const isAdmin = document.getElementById('adminToggle').checked;
         
-        respBox.innerHTML = "<em>Elena está analizando...</em>";
+        respBox.style.opacity = "0.4";
         
         try {
             const res = await fetch('/preguntar', {
@@ -117,16 +154,29 @@
             });
             const data = await res.json();
             ultimaRespuesta = data.respuesta_asistente;
-            respBox.innerText = ultimaRespuesta;
+            
+            respBox.style.opacity = "1";
+            
+            if(isAdmin) {
+                respBox.innerHTML = `<div class="admin-style">${ultimaRespuesta}</div>`;
+            } else {
+                respBox.innerText = ultimaRespuesta;
+            }
+            
             hablar(ultimaRespuesta);
             
-            // Solo mostrar WhatsApp en modo público
-            document.getElementById('waBtn').style.display = isAdmin ? 'none' : 'block';
-        } catch (e) { respBox.innerText = "Error de conexión."; }
+            // Botón WA solo si no es admin y si Elena encontró algo
+            const mostrarWA = !isAdmin && !ultimaRespuesta.includes("No logré identificar");
+            document.getElementById('waBtn').style.display = mostrarWA ? 'block' : 'none';
+            
+        } catch (e) { 
+            respBox.style.opacity = "1";
+            respBox.innerText = "Error de comunicación estratégica."; 
+        }
     }
 
     function enviarWA() {
-        const msg = encodeURIComponent("📦 *Cotización Farmacia*\n\n" + ultimaRespuesta);
+        const msg = encodeURIComponent("📦 *Elena AI - Cotización de Farmacia*\n\n" + ultimaRespuesta);
         window.open(`https://wa.me/?text=${msg}`, '_blank');
     }
 
@@ -134,11 +184,28 @@
 
     async function processUpload() {
         const file = document.getElementById('inventoryFile').files[0];
-        const fd = new FormData(); fd.append('file', file);
-        const res = await fetch('/upload', { method: 'POST', body: fd });
-        const data = await res.json();
-        alert(data.mensaje || data.error);
+        if(!file) return;
+        
+        const fd = new FormData(); 
+        fd.append('file', file);
+        
+        document.getElementById('elenaResponse').innerText = "Sincronizando base de datos...";
+        
+        try {
+            const res = await fetch('/upload', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.mensaje || data.error);
+            document.getElementById('elenaResponse').innerText = "Base de datos lista. ¿Qué desea consultar?";
+        } catch (e) {
+            alert("Error al cargar archivo.");
+        }
     }
+
+    window.onload = () => {
+        setTimeout(() => {
+            hablar("Soy Elena. Por favor, verifique la tasa antes de iniciar la auditoría.");
+        }, 8000);
+    };
 </script>
 
 </body>
