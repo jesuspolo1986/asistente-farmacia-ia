@@ -95,18 +95,49 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
 @app.route('/')
 def index(): return render_template('index.html', tasa=inventario["tasa"])
 
+# Diccionario de Sinónimos para columnas
+MAPEO_COLUMNAS = {
+    'Producto': ['producto', 'descripcion', 'nombre', 'articulo', 'item', 'desc'],
+    'Precio Venta': ['precio venta', 'pvp', 'precio', 'venta', 'precio_venta', 'v. unitario'],
+    'Costo': ['costo', 'precio costo', 'costo_u', 'compra', 'p. costo'],
+    'Stock Actual': ['stock actual', 'stock', 'cantidad', 'existencia', 'cant'],
+    'Stock Mínimo': ['stock mínimo', 'minimo', 'stock_min', 'alerta', 'mínimo'],
+    'Vencimiento': ['vencimiento', 'fecha_venc', 'vence', 'expiracion', 'f_vencimiento'],
+    'Ubicación': ['ubicación', 'estante', 'pasillo', 'localizacion', 'donde']
+}
+
 @app.route('/upload', methods=['POST'])
 def upload():
     file = request.files.get('file')
-    if not file: return jsonify({"error": "No file"}), 400
+    if not file: return jsonify({"error": "No hay archivo"}), 400
     try:
         stream = io.BytesIO(file.read())
         df = pd.read_excel(stream) if file.filename.endswith(('.xlsx', '.xls')) else pd.read_csv(stream)
-        df.columns = [str(c).strip().title() for c in df.columns]
-        inventario["df"] = df
-        return jsonify({"success": True, "mensaje": "Inventario Sincronizado."})
-    except Exception as e: return jsonify({"error": str(e)}), 500
+        
+        # --- LÓGICA DE DETECCIÓN INTELIGENTE ---
+        columnas_reales = {col: str(col).strip().lower() for col in df.columns}
+        nuevas_columnas = {}
 
+        for estandar, sinonimos in MAPEO_COLUMNAS.items():
+            for col_real, col_limpia in columnas_reales.items():
+                if col_limpia in sinonimos:
+                    nuevas_columnas[col_real] = estandar
+                    break
+        
+        # Renombramos solo las que encontramos
+        df.rename(columns=nuevas_columnas, inplace=True)
+        
+        # Verificación de seguridad
+        faltantes = [c for c in ["Producto", "Precio Venta", "Costo", "Stock Actual"] if c not in df.columns]
+        if faltantes:
+            return jsonify({"error": f"Faltan columnas críticas o no reconocidas: {', '.join(faltantes)}"}), 400
+
+        # Limpieza de datos
+        df['Vencimiento'] = pd.to_datetime(df['Vencimiento']).dt.strftime('%Y-%m-%d')
+        inventario["df"] = df
+        return jsonify({"success": True, "mensaje": "Base de datos sincronizada con éxito. Elena reconoce todas las columnas."})
+        
+    except Exception as e: return jsonify({"error": f"Error al leer el archivo: {str(e)}"}), 500
 @app.route('/preguntar', methods=['POST'])
 def preguntar():
     data = request.json
