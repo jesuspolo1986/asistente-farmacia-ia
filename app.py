@@ -3,43 +3,63 @@ import io
 import pandas as pd
 from flask import Flask, request, jsonify, render_template
 from rapidfuzz import process, utils
+import re # Para limpiar la pregunta
 
 app = Flask(__name__)
-
-# Memoria del sistema: Tasa inicial por defecto
 inventario = {"df": None, "tasa": 55.40}
 
-def buscar_analisis_senior(nombre_usuario, tasa_recibida):
+def limpiar_pregunta(texto):
+    """Elimina frases comunes para dejar solo el nombre del producto"""
+    texto = texto.lower()
+    frases_a_quitar = [
+        "cuanto cuesta", "dame el precio de", "precio de", "precio del",
+        "cuanto vale", "en cuanto esta", "tienes", "hablar de", "buscame"
+    ]
+    for frase in frases_a_quitar:
+        texto = texto.replace(frase, "")
+    return texto.strip()
+
+def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
     if inventario["df"] is None:
-        return "Elena: El inventario no ha sido cargado. Por favor, suministre el archivo Excel."
+        return "Elena: No he detectado el archivo de inventario. Por favor, cárguelo."
     
-    # Usamos la tasa que viene directamente del input del usuario en el celular
     tasa = float(tasa_recibida)
     inventario["tasa"] = tasa 
 
-    productos = inventario["df"]['Producto'].astype(str).tolist()
-    match = process.extractOne(nombre_usuario, productos, processor=utils.default_process)
+    # Limpiamos la pregunta para que Elena entienda: "¿Cuánto cuesta la Loratadina?" -> "Loratadina"
+    producto_buscado = limpiar_pregunta(pregunta_original)
     
-    # Nota de suscripción (Hoy 15 de enero - Día de Gracia)
-    nota = " [Nota: Período de Gracia Activo]."
+    productos = inventario["df"]['Producto'].astype(str).tolist()
+    match = process.extractOne(producto_buscado, productos, processor=utils.default_process)
+    
+    nota = " [Nota: Suscripción en Gracia]."
 
-    if match and match[1] > 70:
+    if match and match[1] > 60: # Bajamos un poco el umbral para ser más flexibles
         fila = inventario["df"][inventario["df"]['Producto'] == match[0]].iloc[0]
         precio_usd = float(fila['Precio Venta'])
         precio_bs = precio_usd * tasa
         
-        # Lógica de Sugerencia Senior
-        sugerencia = ""
-        tag = str(match[0]).lower()
-        if "loratadina" in tag:
-            sugerencia = "Recuerde que la hidratación es vital en procesos alérgicos. "
-        elif "ibuprofeno" in tag:
-            sugerencia = "Sugiero acompañar con un protector gástrico para su seguridad. "
-
-        return (f"He auditado '{match[0]}'. Valor: {precio_usd} USD, equivalentes a {precio_bs:,.2f} Bolívares "
-                f"calculados a tasa de {tasa}. {sugerencia}{nota}")
+        if not modo_admin:
+            # MODO PÚBLICO: Solo precio y salud
+            return (f"El activo {match[0]} tiene un valor de {precio_usd} USD, "
+                    f"equivalente a {precio_bs:,.2f} Bolívares. ¿Desea que se lo reserve?")
+        else:
+            # MODO ADMINISTRATIVO: Reporte Técnico Exhaustivo
+            stock = int(fila['Stock Actual'])
+            minimo = int(fila['Stock Mínimo'])
+            ubi = fila['Ubicación']
+            vence = fila['Vencimiento']
+            alerta = "🚨 RECOMPRA INMEDIATA" if stock <= minimo else "✅ NIVEL ÓPTIMO"
+            
+            # Aquí forzamos que Elena responda como jefa de inventario
+            return (f"REPORTE DE AUDITORÍA: {match[0]}. "
+                    f"Costo en sistema: {precio_usd} USD ({precio_bs:,.2f} BS). "
+                    f"Existencia real: {stock} unidades. Mínimo requerido: {minimo}. "
+                    f"Estado: {alerta}. Ubicación física: {ubi}. Vencimiento: {vence}.{nota}")
     
-    return f"No localizo el activo '{nombre_usuario}' en los registros actuales.{nota}"
+    return f"No logré identificar el producto '{producto_buscado}' en el inventario actual.{nota}"
+
+# ... (Resto de las rutas /index, /upload, /preguntar igual que el anterior) ...
 
 @app.route('/')
 def index():
@@ -54,7 +74,7 @@ def upload():
         df = pd.read_excel(stream) if file.filename.endswith(('.xlsx', '.xls')) else pd.read_csv(stream)
         df.columns = [str(c).strip().title() for c in df.columns]
         inventario["df"] = df
-        return jsonify({"success": True, "mensaje": f"Sincronizado: {len(df)} productos."})
+        return jsonify({"success": True, "mensaje": f"Base de datos lista: {len(df)} productos."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -62,11 +82,10 @@ def upload():
 def preguntar():
     data = request.json
     pregunta = data.get("pregunta", "")
-    tasa_frontend = data.get("tasa", 55.40) # Recibe la tasa del input manual
-    respuesta = buscar_analisis_senior(pregunta, tasa_frontend)
-    return jsonify({
-        "respuesta_asistente": respuesta
-    })
+    tasa_f = data.get("tasa", 55.40)
+    es_admin = data.get("modo_admin", False)
+    respuesta = buscar_analisis_senior(pregunta, tasa_f, es_admin)
+    return jsonify({"respuesta_asistente": respuesta})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))
