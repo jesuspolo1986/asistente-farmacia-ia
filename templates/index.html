@@ -3,48 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elena AI | Dual Control</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Elena AI | Pharmacy BI</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root { --accent: #007aff; --admin: #5856d6; --bg: #f2f2f7; }
-        body { background: var(--bg); font-family: 'Inter', sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; overflow: hidden; }
-        
-        .glass-card { background: white; border-radius: 35px; padding: 2rem; width: 95%; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center; border: 1px solid rgba(255,255,255,0.8); }
-        
-        /* Panel de Control Superior */
-        .mode-switch { background: #f8f9fa; border-radius: 20px; padding: 15px; margin-bottom: 20px; border: 1px solid #eee; transition: 0.3s; }
-        .mode-switch.admin-active { border-color: var(--admin); background: #f0f0ff; }
-        
-        .tasa-input { max-width: 110px; text-align: center; font-weight: 700; color: var(--accent); border: 2px solid #eee; border-radius: 10px; font-size: 1.1rem; }
-        
-        /* Botón de Micrófono */
-        .mic-btn { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--accent); color: white; font-size: 2.5rem; margin: 15px 0; cursor: pointer; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 20px rgba(0,122,255,0.3); }
-        .mic-btn.admin-on { background: var(--admin); box-shadow: 0 10px 20px rgba(88, 86, 214, 0.3); transform: scale(1.05); }
+        body { background: var(--bg); font-family: sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+        .glass-card { background: white; border-radius: 30px; padding: 2rem; width: 95%; max-width: 400px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; }
+        .mic-btn { width: 80px; height: 80px; border-radius: 50%; border: none; background: var(--accent); color: white; font-size: 2rem; margin: 15px 0; cursor: pointer; transition: 0.3s; }
+        .mic-btn.admin-on { background: var(--admin); }
         .mic-btn.listening { background: #ff3b30; animation: pulse 1.5s infinite; }
-        
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 20px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
-        
-        /* Área de Respuesta */
-        .response-container { min-height: 120px; margin: 15px 0; display: flex; align-items: center; justify-content: center; }
-        .response-text { font-size: 1.05rem; color: #1c1c1e; line-height: 1.5; transition: 0.3s; width: 100%; }
-        .admin-style { text-align: left; font-size: 0.9rem; border-left: 4px solid var(--admin); padding-left: 12px; color: #3a3a3c; }
-        
-        .wa-btn { background: #25d366; color: white; border-radius: 16px; padding: 14px; text-decoration: none; display: none; width: 100%; font-weight: 600; border: none; margin-top: 10px; transition: 0.2s; }
-        .wa-btn:hover { background: #128c7e; transform: translateY(-2px); }
-        
-        .form-control-sm { border-radius: 10px; padding: 10px; }
-        .small-link { font-size: 0.75rem; color: #8e8e93; text-decoration: none; transition: 0.2s; }
-        .small-link:hover { color: var(--accent); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,39,48,0.4); } 70% { box-shadow: 0 0 0 20px rgba(255,39,48,0); } }
+        .response-text { min-height: 80px; margin: 15px 0; font-size: 1rem; color: #333; }
+        .wa-btn { border-radius: 12px; padding: 12px; width: 100%; font-weight: 600; border: none; margin-top: 8px; color: white; text-decoration: none; display: none; }
     </style>
 </head>
 <body>
 
 <div class="glass-card">
-    <div class="mode-switch" id="uiPanel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <span class="small fw-bold text-muted">TASA BS</span>
-            <input type="number" id="tasaManual" class="tasa-input" value="{{ tasa }}" step="0.01">
+    <div class="p-3 mb-3 bg-light rounded-4 border">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small fw-bold">TASA BS</span>
+            <input type="number" id="tasaManual" class="form-control form-control-sm w-50 text-center" value="{{ tasa }}" step="0.01">
         </div>
         <div class="form-check form-switch d-flex justify-content-center">
             <input class="form-check-input me-2" type="checkbox" id="adminToggle" onchange="updateUI()">
@@ -52,23 +31,18 @@
         </div>
     </div>
 
-    <h3 class="fw-600 mb-0" id="mainTitle">Elena AI</h3>
-    <p class="text-muted small mb-1" id="subLabel">Consultoría Senior</p>
+    <h4 class="mb-0">Elena AI</h4>
+    <p class="text-muted small" id="subLabel">Consultoría Senior</p>
 
     <button class="mic-btn" id="micBtn" onclick="toggleListening()">🎤</button>
-    
-    <div class="response-container">
-        <div class="response-text" id="elenaResponse">
-            "Bienvenido. Presione el icono para iniciar la consulta por voz."
-        </div>
-    </div>
+    <div class="response-text" id="elenaResponse">"Lista para auditoría."</div>
 
-    <button id="waBtn" class="wa-btn" onclick="enviarWA()">📱 Enviar Presupuesto al Cliente</button>
+    <button id="waBtn" class="wa-btn" style="background: #25d366;" onclick="enviarWA()">📱 Enviar Presupuesto</button>
+    <button id="pdfBtn" class="wa-btn" style="background: var(--admin);" onclick="descargarPDF()">📄 Descargar PDF de Pedidos</button>
 
-    <input type="text" id="manualInput" class="form-control form-control-sm mt-3 border-0 bg-light text-center" placeholder="O escriba el nombre aquí..." onkeypress="handleKey(event)">
-    
+    <input type="text" id="manualInput" class="form-control mt-3 border-0 bg-light text-center" placeholder="Producto..." onkeypress="handleKey(event)">
     <input type="file" id="inventoryFile" hidden onchange="processUpload()">
-    <a href="javascript:void(0)" class="small-link d-block mt-4" onclick="document.getElementById('inventoryFile').click()">📊 Sincronizar Base de Datos</a>
+    <a href="javascript:void(0)" class="d-block mt-3 small text-muted" onclick="document.getElementById('inventoryFile').click()">📊 Cargar Excel</a>
 </div>
 
 <script>
@@ -76,137 +50,80 @@
     let ultimaRespuesta = "";
 
     function hablar(texto) {
-        if (!texto) return;
         synth.cancel();
         const u = new SpeechSynthesisUtterance(texto);
-        u.lang = 'es-MX'; 
-        u.rate = 0.95; 
-        u.pitch = 0.9;
+        u.lang = 'es-MX'; u.rate = 0.95;
         synth.speak(u);
     }
 
     function updateUI() {
         const isAdmin = document.getElementById('adminToggle').checked;
-        const panel = document.getElementById('uiPanel');
-        const label = document.getElementById('modeLabel');
         const mic = document.getElementById('micBtn');
-        const sub = document.getElementById('subLabel');
+        const pdfBtn = document.getElementById('pdfBtn');
+        const label = document.getElementById('modeLabel');
         
         if(isAdmin) {
-            panel.classList.add('admin-active');
             label.innerText = "MODO ADMINISTRATIVO";
-            label.style.color = "var(--admin)";
             mic.classList.add('admin-on');
-            sub.innerText = "Gestión de Inventario Interno";
+            pdfBtn.style.display = 'block';
         } else {
-            panel.classList.remove('admin-active');
             label.innerText = "ATENCIÓN PÚBLICO";
-            label.style.color = "gray";
             mic.classList.remove('admin-on');
-            sub.innerText = "Consultoría Senior";
+            pdfBtn.style.display = 'none';
         }
     }
 
     function toggleListening() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert("Su navegador no soporta voz. Use el teclado.");
-            return;
-        }
-        
-        const recognition = new SpeechRecognition();
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         recognition.lang = 'es-ES';
-        
-        recognition.onstart = () => {
-            document.getElementById('micBtn').classList.add('listening');
-            document.getElementById('elenaResponse').innerText = "Elena escuchando...";
-        };
-        
-        recognition.onend = () => {
-            document.getElementById('micBtn').classList.remove('listening');
-        };
-        
+        recognition.onstart = () => document.getElementById('micBtn').classList.add('listening');
+        recognition.onend = () => document.getElementById('micBtn').classList.remove('listening');
         recognition.onresult = (e) => {
-            const query = e.results[0][0].transcript;
-            document.getElementById('manualInput').value = query;
-            solicitarAnalisis(query);
+            const q = e.results[0][0].transcript;
+            document.getElementById('manualInput').value = q;
+            solicitarAnalisis(q);
         };
-        
         recognition.start();
     }
 
     async function solicitarAnalisis(query) {
-        const respBox = document.getElementById('elenaResponse');
-        const tasaVal = document.getElementById('tasaManual').value;
         const isAdmin = document.getElementById('adminToggle').checked;
-        
-        respBox.style.opacity = "0.4";
-        
-        try {
-            const res = await fetch('/preguntar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    pregunta: query,
-                    tasa: tasaVal,
-                    modo_admin: isAdmin
-                })
-            });
-            const data = await res.json();
-            ultimaRespuesta = data.respuesta_asistente;
-            
-            respBox.style.opacity = "1";
-            
-            if(isAdmin) {
-                respBox.innerHTML = `<div class="admin-style">${ultimaRespuesta}</div>`;
-            } else {
-                respBox.innerText = ultimaRespuesta;
-            }
-            
-            hablar(ultimaRespuesta);
-            
-            // Botón WA solo si no es admin y si Elena encontró algo
-            const mostrarWA = !isAdmin && !ultimaRespuesta.includes("No logré identificar");
-            document.getElementById('waBtn').style.display = mostrarWA ? 'block' : 'none';
-            
-        } catch (e) { 
-            respBox.style.opacity = "1";
-            respBox.innerText = "Error de comunicación estratégica."; 
-        }
+        const res = await fetch('/preguntar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pregunta: query, tasa: document.getElementById('tasaManual').value, modo_admin: isAdmin })
+        });
+        const data = await res.json();
+        ultimaRespuesta = data.respuesta_asistente;
+        document.getElementById('elenaResponse').innerText = ultimaRespuesta;
+        hablar(ultimaRespuesta);
+        document.getElementById('waBtn').style.display = isAdmin ? 'none' : 'block';
     }
 
     function enviarWA() {
-        const msg = encodeURIComponent("📦 *Elena AI - Cotización de Farmacia*\n\n" + ultimaRespuesta);
-        window.open(`https://wa.me/?text=${msg}`, '_blank');
+        window.open(`https://wa.me/?text=${encodeURIComponent(ultimaRespuesta)}`, '_blank');
+    }
+
+    function descargarPDF() {
+        window.location.href = '/descargar-pdf';
     }
 
     function handleKey(e) { if(e.key === 'Enter') solicitarAnalisis(e.target.value); }
 
     async function processUpload() {
-        const file = document.getElementById('inventoryFile').files[0];
-        if(!file) return;
-        
-        const fd = new FormData(); 
-        fd.append('file', file);
-        
-        document.getElementById('elenaResponse').innerText = "Sincronizando base de datos...";
-        
-        try {
-            const res = await fetch('/upload', { method: 'POST', body: fd });
-            const data = await res.json();
-            alert(data.mensaje || data.error);
-            document.getElementById('elenaResponse').innerText = "Base de datos lista. ¿Qué desea consultar?";
-        } catch (e) {
-            alert("Error al cargar archivo.");
-        }
+        const fd = new FormData(); fd.append('file', document.getElementById('inventoryFile').files[0]);
+        const res = await fetch('/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        alert(data.mensaje || data.error);
     }
 
     window.onload = () => {
         setTimeout(() => {
-            hablar("Soy Elena. Por favor, verifique la tasa antes de iniciar la auditoría.");
-        }, 8000);
+            const h = new Date().getHours();
+            const msg = h < 12 ? "Buenos días. Tasa lista para actualizar." : "Buenas tardes. ¿Iniciamos auditoría?";
+            hablar(msg);
+        }, 1000);
     };
 </script>
-
 </body>
 </html>
