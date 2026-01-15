@@ -79,46 +79,53 @@ def upload():
 @app.route('/escanear-receta', methods=['POST'])
 def escanear_receta():
     global df_inv
+    
+    # 1. Validaciones iniciales
     if df_inv is None:
-        return jsonify({"respuesta_asistente": "Hola, soy Elena. Por favor, primero carga el archivo de inventario para poder ayudarte con los precios."})
+        return jsonify({"respuesta_asistente": "Primero carga el inventario, por favor."})
     
     if 'receta' not in request.files:
-        return jsonify({"respuesta_asistente": "No recibí ninguna imagen de la receta."})
+        return jsonify({"respuesta_asistente": "No hay imagen."})
     
     file = request.files['receta']
     if file.filename == '':
-        return jsonify({"respuesta_asistente": "Nombre de archivo vacío."})
+        return jsonify({"respuesta_asistente": "Archivo sin nombre."})
 
+    # 2. Guardar el archivo primero
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
 
     try:
-        # 1. Extraer texto con EasyOCR
+        # 3. Inicializar Reader SOLAMENTE después de tener el archivo
+        # Esto ahorra RAM si la validación anterior falla
+        reader = easyocr.Reader(['es'], gpu=False) 
+        
+        # 4. OCR
         resultados = reader.readtext(filepath, detail=0)
         texto_extraido = " ".join(resultados)
         
-        # 2. Aviso de Día de Gracia (Dato: 15 de Enero)
+        # 5. Liberar memoria de inmediato
+        del reader
+        
+        # 6. Lógica de negocio
         aviso_gracia = " Nota: Tu suscripción venció ayer 14 de enero, hoy estás en tu día de gracia."
-
-        # 3. Búsqueda con lógica difusa
         producto_detectado = buscar_producto_inteligente(texto_extraido, df_inv)
 
         if producto_detectado is not None:
-            respuesta = (f"He analizado el récipe. Identifiqué {producto_detectado['Producto']}. "
-                         f"El precio actual es de ${producto_detectado['Precio Venta']} y tenemos "
-                         f"{producto_detectado['Stock Actual']} unidades disponibles."
-                         + aviso_gracia)
+            respuesta = (f"Identifiqué {producto_detectado['Producto']}. "
+                         f"Precio: ${producto_detectado['Precio Venta']}. "
+                         f"Stock: {producto_detectado['Stock Actual']}." + aviso_gracia)
         else:
-            respuesta = "He leído el récipe pero no logro encontrar una coincidencia clara en el inventario. ¿Podrías decirme el nombre del medicamento?" + aviso_gracia
+            respuesta = "No encontré el medicamento en el inventario." + aviso_gracia
 
         return jsonify({"respuesta_asistente": respuesta})
 
     except Exception as e:
-        return jsonify({"respuesta_asistente": f"Hubo un error técnico al leer la imagen: {str(e)}"})
+        return jsonify({"respuesta_asistente": f"Error: {str(e)}"})
     finally:
-        # Limpieza: Borrar el archivo procesado para ahorrar espacio
-        if os.path.exists(filepath):
+        # 7. Limpieza de archivos siempre
+        if 'filepath' in locals() and os.path.exists(filepath):
             os.remove(filepath)
 
 @app.route('/preguntar/<nombre_completo>', methods=['GET'])
