@@ -7,4 +7,7 @@ matplotlib
 groq
 python-dotenv==1.0.1
 fpdf2
-mistralai==1.2.1
+mistralai==1.2.1    
+easyocr
+rapidfuzz
+opencv-python-headless
