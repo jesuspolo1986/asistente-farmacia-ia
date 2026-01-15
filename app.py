@@ -26,7 +26,7 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
     hoy = datetime.now()
 
     # ==========================================================
-    # LÓGICA DE COMANDOS GLOBALES (SOLO ADMIN)
+    # LÓGICA DE COMANDOS GLOBALES (SOLO MODO ADMINISTRATIVO)
     # ==========================================================
     if modo_admin:
         # 1. Comando para VENCIDOS
@@ -36,16 +36,28 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
             lista = ", ".join(vencidos_df['Producto'].tolist())
             return f"Alerta de Auditoría: Tenemos vencidos: {lista}. Revise el PDF para ubicarlos."
 
-        # 2. Comando para FALTANTES / STOCK BAJO
-        if any(palabra in pregunta_limpia for palabra in ["falta", "stock bajo", "reposición", "comprar"]):
-            faltantes_df = df[df['Stock Actual'] <= df['Stock Mínimo']]
-            if faltantes_df.empty: return "El inventario está completo según los niveles mínimos."
-            # Tomamos los 5 más críticos para no saturar el audio
-            lista_f = ", ".join(faltantes_df['Producto'].head(5).tolist())
-            return f"Atención: Faltan {len(faltantes_df)} productos. Los más urgentes son: {lista_f}. He preparado la lista completa en el botón de PDF."
+        # 2. Comando para FALTANTES / STOCK BAJO con Cálculo de Inversión
+        if any(palabra in pregunta_limpia for palabra in ["falta", "stock bajo", "reposición", "comprar", "invertir"]):
+            # Filtramos los que están en el mínimo o por debajo
+            faltantes_df = df[df['Stock Actual'] <= df['Stock Mínimo']].copy()
+            
+            if faltantes_df.empty: 
+                return "El inventario está completo según los niveles mínimos establecidos."
+            
+            # Cálculo de inversión necesaria para llegar al nivel óptimo (mínimo)
+            faltantes_df['Diferencia'] = faltantes_df['Stock Mínimo'] - faltantes_df['Stock Actual']
+            inversion_usd = (faltantes_df['Diferencia'] * faltantes_df['Costo']).sum()
+            inversion_bs = inversion_usd * tasa
+            
+            # Preparamos la respuesta de voz con los 3 más urgentes
+            lista_f = ", ".join(faltantes_df['Producto'].head(3).tolist())
+            
+            return (f"Atención: Faltan {len(faltantes_df)} productos. Necesitamos invertir "
+                    f"{inversion_usd:,.2f} dólares ({inversion_bs:,.2f} bolívares) para reponer el stock mínimo. "
+                    f"Los principales son: {lista_f}. Revise el PDF para el detalle completo.")
 
     # ==========================================================
-    # BÚSQUEDA INDIVIDUAL (LÓGICA ANTERIOR)
+    # BÚSQUEDA DE PRODUCTO INDIVIDUAL (MATCHING)
     # ==========================================================
     producto_buscado = limpiar_pregunta(pregunta_original)
     productos = df['Producto'].astype(str).tolist()
@@ -59,7 +71,7 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
         stock = int(fila['Stock Actual'])
         minimo = int(fila['Stock Mínimo'])
 
-        # Pareto e Indicadores
+        # Cálculo de Pareto y Margen
         df['Valor_Inv'] = df['Stock Actual'] * df['Precio Venta']
         umbral_pareto = df['Valor_Inv'].quantile(0.8)
         es_pareto = "⭐ PARETO A" if (stock * precio_usd) >= umbral_pareto else "Clase B/C"
@@ -74,10 +86,12 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
             if vencido: rec = "❌ VENCIDO"
             elif stock <= minimo: rec = "⚠️ REPONER"
             elif stock > (minimo * 3): rec = "📦 SOBRE-STOCK"
-            return f"AUDITORÍA: {match[0]} ({es_pareto}). Margen: {margen:.1f}%. Stock: {stock}. Predicción: {rec}"
+            
+            return (f"AUDITORÍA: {match[0]} ({es_pareto}). "
+                    f"Margen: {margen:.1f}%. Stock: {stock}. "
+                    f"Ubicación: {fila['Ubicación']}. Predicción: {rec}")
     
-    return "Elena: No logré identificar el producto o comando."
-
+    return "Elena: No logré identificar el producto o comando de auditoría."
 @app.route('/')
 def index(): return render_template('index.html', tasa=inventario["tasa"])
 
