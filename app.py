@@ -37,7 +37,7 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
             return f"Alerta de Auditoría: Tenemos vencidos: {lista}. Revise el PDF para ubicarlos."
 
         # 2. Comando para FALTANTES / STOCK BAJO con Cálculo de Inversión
-        if any(palabra in pregunta_limpia for palabra in ["falta", "stock bajo", "reposición", "comprar", "invertir"]):
+        if any(palabra in pregunta_limpia for palabra in ["falta", "stock bajo", "reposición", "comprar", "invertir", "agotarse", "pedir", "faltantes"]):
             # Filtramos los que están en el mínimo o por debajo
             faltantes_df = df[df['Stock Actual'] <= df['Stock Mínimo']].copy()
             
