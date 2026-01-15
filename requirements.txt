@@ -1,6 +1,6 @@
-requests
-flask
+Flask
 pandas
 openpyxl
 rapidfuzz
+fpdf
 gunicorn
