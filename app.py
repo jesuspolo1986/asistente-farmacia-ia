@@ -1,12 +1,13 @@
 import os
 import io
 import pandas as pd
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 from rapidfuzz import process, utils
+from datetime import datetime
+from fpdf import FPDF # Asegúrate de tener 'fpdf' en requirements.txt
 
 app = Flask(__name__)
 
-# Memoria global sincronizada
 inventario = {"df": None, "tasa": 36.50}
 
 MAPEO_COLUMNAS = {
@@ -26,38 +27,65 @@ def preguntar():
     pregunta = data.get("pregunta", "").lower().strip()
     modo_admin = data.get("modo_admin", False)
     
-    # 1. COMANDO: Activar Admin
     if pregunta == "activar modo gerencia":
         return jsonify({"respuesta": "MODO_ADMIN_ACTIVADO"})
 
-    # 2. SINCRONIZACIÓN DE TASA (Manual desde el input)
+    # Sincronizar Tasa (SOLO SI ES ADMIN)
     if modo_admin and data.get("nueva_tasa"):
         inventario["tasa"] = float(data.get("nueva_tasa"))
         return jsonify({"respuesta": "TASA_OK", "tasa_sync": inventario["tasa"]})
 
-    # 3. Búsqueda de productos
     if inventario["df"] is None:
-        return jsonify({"respuesta": "Elena: Sincronice el inventario primero."})
+        return jsonify({"respuesta": "Elena: Inventario no cargado."})
     
     df = inventario["df"]
-    p_busqueda = pregunta.replace("precio", "").strip()
-    match = process.extractOne(p_busqueda, df['Producto'].astype(str).tolist(), processor=utils.default_process)
+    match = process.extractOne(pregunta.replace("precio", "").strip(), df['Producto'].astype(str).tolist(), processor=utils.default_process)
     
     if match and match[1] > 60:
         f = df[df['Producto'] == match[0]].iloc[0]
-        tasa_actual = inventario["tasa"]
-        precio_usd = float(f['Precio Venta'])
-        precio_bs = precio_usd * tasa_actual
+        tasa = inventario["tasa"]
+        p_usd = float(f['Precio Venta'])
+        p_bs = p_usd * tasa
         
         if modo_admin:
-            m = ((precio_usd - f['Costo']) / precio_usd) * 100 if precio_usd > 0 else 0
-            res = f"📊 {match[0]} | Costo: ${f['Costo']:.2f} | Venta: ${precio_usd:.2f} | Margen: {m:.1f}% | Stock: {int(f['Stock Actual'])}"
+            # MODO ADMIN: Dice TODO (incluyendo stock y ganancia)
+            m = ((p_usd - f['Costo']) / p_usd) * 100 if p_usd > 0 else 0
+            res = f"📊 {match[0]} | Costo: ${f['Costo']:.2f} | Venta: ${p_usd:.2f} | Margen: {m:.1f}% | Stock: {int(f['Stock Actual'])}"
         else:
-            res = f"El {match[0]} cuesta {precio_bs:,.2f} Bolívares, que son {precio_usd:,.2f} Dólares. Stock: {int(f['Stock Actual'])}."
+            # MODO VENDEDOR: Solo BS y USD. SIN STOCK.
+            res = f"El {match[0]} cuesta {p_bs:,.2f} Bolívares, que equivalen a {p_usd:,.2f} Dólares."
         
-        return jsonify({"respuesta": res, "tasa_sync": tasa_actual})
+        return jsonify({"respuesta": res, "tasa_sync": tasa})
 
-    return jsonify({"respuesta": "Producto no encontrado.", "tasa_sync": inventario["tasa"]})
+    return jsonify({"respuesta": "No encontrado.", "tasa_sync": inventario["tasa"]})
+
+@app.route('/descargar-reporte')
+def descargar_reporte():
+    try:
+        if inventario["df"] is None: return "No hay datos", 400
+        df = inventario["df"]
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, "REPORTE DE FARMACIA", ln=True, align='C')
+        pdf.set_font("Arial", '', 10)
+        pdf.cell(200, 10, f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True, align='C')
+        pdf.ln(10)
+
+        # Cálculos
+        t_costo = (df['Costo'] * df['Stock Actual']).sum()
+        t_venta = (df['Precio Venta'] * df['Stock Actual']).sum()
+
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 10, f"Valor Total (Costo): ${t_costo:,.2f}", ln=True)
+        pdf.cell(0, 10, f"Valor Total (Venta): ${t_venta:,.2f}", ln=True)
+        
+        output = io.BytesIO()
+        pdf.output(output)
+        output.seek(0)
+        return send_file(output, mimetype='application/pdf', as_attachment=True, download_name="Reporte_Farmacia.pdf")
+    except Exception as e:
+        return str(e), 500
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -69,55 +97,9 @@ def upload():
         nuevas = {c: est for est, sin in MAPEO_COLUMNAS.items() for c in df.columns if str(c).lower().strip() in sin}
         df.rename(columns=nuevas, inplace=True)
         inventario["df"] = df
-        return jsonify({"success": True, "mensaje": "Inventario sincronizado con éxito."})
+        return jsonify({"success": True, "mensaje": "Inventario sincronizado."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
-from fpdf import FPDF
 
-@app.route('/descargar-reporte')
-def descargar_reporte():
-    if inventario["df"] is None: return "No hay datos", 400
-    
-    df = inventario["df"]
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, "REPORTE DE GERENCIA - ELENA AI", ln=True, align='C')
-    pdf.set_font("Arial", '', 10)
-    pdf.cell(200, 10, f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True, align='C')
-    pdf.ln(10)
-
-    # Cálculos rápidos
-    total_costo = (df['Costo'] * df['Stock Actual']).sum()
-    total_venta = (df['Precio Venta'] * df['Stock Actual']).sum()
-    stock_bajo = df[df['Stock Actual'] < 5]
-
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(100, 10, f"Valor Total Inventario (Costo): ${total_costo:,.2f}")
-    pdf.ln(7)
-    pdf.cell(100, 10, f"Valor Total Inventario (Venta): ${total_venta:,.2f}")
-    pdf.ln(15)
-
-    pdf.set_text_color(255, 0, 0)
-    pdf.cell(100, 10, "PRODUCTOS CON STOCK CRITICO (<5 unidades):")
-    pdf.ln(10)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Arial", 'B', 9)
-    pdf.cell(120, 8, "Producto", 1)
-    pdf.cell(30, 8, "Stock", 1)
-    pdf.cell(40, 8, "Ubicacion", 1)
-    pdf.ln()
-    
-    pdf.set_font("Arial", '', 9)
-    for _, fila in stock_bajo.iterrows():
-        pdf.cell(120, 8, str(fila['Producto'])[:60], 1)
-        pdf.cell(30, 8, str(int(fila['Stock Actual'])), 1)
-        pdf.cell(40, 8, str(fila.get('Ubicación', 'N/A')), 1)
-        pdf.ln()
-
-    output = io.BytesIO()
-    pdf.output(output)
-    output.seek(0)
-    return send_file(output, mimetype='application/pdf', as_attachment=True, download_name="Reporte_Elena_Farmacia.pdf")
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
