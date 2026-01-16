@@ -39,50 +39,56 @@ def limpiar_pregunta(texto):
 
 # --- MOTOR DE INTELIGENCIA FUSIONADO ---
 def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
-    if inventario["df"] is None: return "Elena: Por favor, sincronice el inventario primero."
+    if inventario["df"] is None: 
+        return "Elena: Por favor, sube un archivo primero."
     
-    tasa = float(tasa_recibida)
-    inventario["tasa"] = tasa 
+    # --- INICIALIZACIÓN DE VARIABLES (CRÍTICO) ---
     df = inventario["df"]
-    rubro = inventario["rubro"]
+    tasa = float(tasa_recibida)
     p_limpia = pregunta_original.lower()
+    rubro = inventario.get("rubro", "General") # Evita error si rubro no existe
     hoy = datetime.now()
+    
+    # --- BLOQUE DE SEGURIDAD CRÍTICO ---
+    if 'Producto' not in df.columns:
+        posibles_nombres = ['SKU', 'Empleado', 'Ruta', 'Articulo', 'Item', 'Nombre']
+        for p in posibles_nombres:
+            if p in df.columns:
+                df.rename(columns={p: 'Producto'}, inplace=True)
+                break
+        else:
+            # Si no hay coincidencias, la columna 0 será 'Producto'
+            df.rename(columns={df.columns[0]: 'Producto'}, inplace=True)
 
     # ==========================================================
-    # LÓGICA ESTRATÉGICA (SOLO MODO ADMINISTRATIVO)
+    # LÓGICA ESTRATÉGICA (MODO ADMINISTRATIVO)
     # ==========================================================
     if modo_admin:
-        # 1. Comandos de AI Pro Analyst (Ventas)
+        # 1. Ventas / Vendedores
         if any(p in p_limpia for p in ["vendedor", "promedio", "quién vendió"]):
-            if 'Vendedor' in df.columns:
+            if 'Vendedor' in df.columns and 'Total' in df.columns:
                 stats = df.groupby('Vendedor')['Total'].agg(['mean', 'sum', 'count']).sort_values(by='sum', ascending=False)
                 top_v = stats.index[0]
                 return f"Líder en ventas: {top_v} con ${stats.loc[top_v, 'sum']:,.2f}. Promedio: ${stats.loc[top_v, 'mean']:,.2f}."
-            return "Este archivo no contiene datos de vendedores."
+            return "Este archivo no tiene columnas de 'Vendedor' y 'Total' para analizar."
 
-        # 2. Análisis de Pareto / Rentabilidad
+        # 2. Pareto (Usa 'Total' o en su defecto 'Precio Venta')
         if any(p in p_limpia for p in ["rentable", "pareto", "estrella"]):
-            col_v = 'Total' if 'Total' in df.columns else 'Precio Venta'
-            pareto = df.groupby('Producto')[col_v].sum().sort_values(ascending=False)
-            return f"El producto estrella de tu {rubro} es {pareto.index[0]} (${pareto.iloc[0]:,.2f})."
+            col_v = 'Total' if 'Total' in df.columns else ('Precio Venta' if 'Precio Venta' in df.columns else None)
+            if col_v:
+                pareto = df.groupby('Producto')[col_v].sum().sort_values(ascending=False)
+                return f"El producto estrella de tu {rubro} es {pareto.index[0]} con un valor de ${pareto.iloc[0]:,.2f}."
+            return "No hay datos numéricos de precio o total para calcular rentabilidad."
 
-        # 3. Comandos de Farmacia (Vencidos)
-        if "vencido" in p_limpia:
-            vencidos_df = df[pd.to_datetime(df['Vencimiento']) < hoy]
+        # 3. Farmacia / Vencidos
+        if "vencido" in p_limpia and 'Vencimiento' in df.columns:
+            vencidos_df = df[pd.to_datetime(df['Vencimiento'], errors='coerce') < hoy]
             if vencidos_df.empty: return "Excelente, no hay productos vencidos."
             lista = ", ".join(vencidos_df['Producto'].head(5).tolist())
-            return f"Alerta Sanitaria en {rubro}: Tenemos vencidos como {lista}."
-
-        # 4. Faltantes e Inversión
-        if any(x in p_limpia for x in ["falta", "stock bajo", "invertir", "comprar"]):
-            faltantes_df = df[df['Stock Actual'] <= df['Stock Mínimo']].copy()
-            if faltantes_df.empty: return "El stock está en niveles óptimos."
-            faltantes_df['Diferencia'] = faltantes_df['Stock Mínimo'] - faltantes_df['Stock Actual']
-            inv_usd = (faltantes_df['Diferencia'] * faltantes_df['Costo']).sum()
-            return f"Atención: Faltan {len(faltantes_df)} items. Inversión necesaria: {inv_usd:,.2f} USD."
+            return f"Alerta Sanitaria: Tenemos vencidos como {lista}."
 
     # ==========================================================
-    # BÚSQUEDA DE PRODUCTO (UNIVERSAL)
+    # BÚSQUEDA UNIVERSAL (RAPIDFUZZ)
     # ==========================================================
     prod_buscado = limpiar_pregunta(pregunta_original)
     productos = df['Producto'].astype(str).tolist()
@@ -90,20 +96,22 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
     
     if match and match[1] > 60:
         fila = df[df['Producto'] == match[0]].iloc[0]
-        p_usd = float(fila['Precio Venta'])
-        p_bs = p_usd * tasa
         
-        if not modo_admin:
-            return f"El valor de {match[0]} es {p_bs:,.2f} BS ({p_usd:,.2f} USD)."
-        else:
-            costo = float(fila['Costo'])
-            margen = ((p_usd - costo) / p_usd) * 100
-            return f"Auditoría {match[0]}: Stock {fila['Stock Actual']}. Margen {margen:.1f}%. Rubro: {rubro}."
+        # Validamos si existen columnas de precio antes de calcular
+        if 'Precio Venta' in df.columns:
+            p_usd = float(fila['Precio Venta'])
+            p_bs = p_usd * tasa
+            if not modo_admin:
+                return f"El valor de {match[0]} es {p_bs:,.2f} BS ({p_usd:,.2f} USD)."
+            else:
+                costo = float(fila['Costo']) if 'Costo' in df.columns else 0
+                stock = fila['Stock Actual'] if 'Stock Actual' in df.columns else 'N/A'
+                margen = ((p_usd - costo) / p_usd) * 100 if p_usd > 0 else 0
+                return f"Auditoría {match[0]}: Stock {stock}. Margen {margen:.1f}%. Rubro: {rubro}."
+        
+        return f"He encontrado el registro de {match[0]} en el archivo de {rubro}, pero no tiene columna de precio."
 
-    return f"No encontré el producto, pero como tu asistente de {rubro} puedo analizar tu gestión general."
-
-# --- RUTAS FLASK ---
-
+    return f"No encontré el registro, pero puedo analizar otros datos de tu archivo de {rubro}."
 @app.route('/')
 def index(): return render_template('index.html', tasa=inventario["tasa"])
 
