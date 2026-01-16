@@ -7,54 +7,21 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# --- MEMORIA GLOBAL PERSISTENTE ---
-# Mientras el servidor en Koyeb esté encendido, todos los usuarios ven estos mismos datos
-inventario = {
-    "df": None, 
-    "tasa": 325.40, 
-    "ultima_actualizacion": "No sincronizado"
-}
+# Memoria global para que todas las PCs vean lo mismo
+inventario = {"df": None, "tasa": 325.40}
 
 MAPEO_COLUMNAS = {
     'Producto': ['producto', 'descripcion', 'nombre', 'articulo', 'item'],
     'Precio Venta': ['precio venta', 'pvp', 'precio', 'venta', 'precio_unitario'],
     'Costo': ['costo', 'compra', 'p.costo'],
-    'Stock Actual': ['stock actual', 'stock', 'cantidad', 'existencia'],
-    'Vencimiento': ['vencimiento', 'vence', 'expiracion']
+    'Stock Actual': ['stock actual', 'stock', 'cantidad', 'existencia']
 }
 
-def buscar_analisis(pregunta, tasa, modo_admin):
-    if inventario["df"] is None: return "Elena: Esperando carga de inventario desde gerencia."
-    
-    df = inventario["df"]
-    p_limpia = pregunta.lower().replace("precio", "").replace("dame el", "").strip()
-    
-    match = process.extractOne(p_limpia, df['Producto'].astype(str).tolist(), processor=utils.default_process)
-    
-    if match and match[1] > 60:
-        f = df[df['Producto'] == match[0]].iloc[0]
-        precio_bs = f['Precio Venta'] * float(tasa)
-        
-        if modo_admin:
-            # Info sensible para el dueño/gerente
-            m = ((f['Precio Venta'] - f['Costo']) / f['Precio Venta']) * 100 if f['Precio Venta'] > 0 else 0
-            return (f"📊 {match[0]} | Costo: ${f['Costo']:.2f} | Venta: ${f['Precio Venta']:.2f} | "
-                    f"Margen: {m:.1f}% | Stock: {int(f['Stock Actual'])}")
-        
-        # Info pública para vendedores
-        return f"El {match[0]} cuesta {precio_bs:,.2f} BS (${f['Precio Venta']:,.2f} USD). Stock: {int(f['Stock Actual'])}."
-
-    return "Lo siento, no encuentro ese producto en el inventario."
-
 @app.route('/')
-def terminal_ventas():
-    # URL para los empleados (Aura Azul)
-    return render_template('index.html', modo="vendedor", tasa=inventario["tasa"])
-
-@app.route('/gerencia-farmacia-2026') # URL SECRETA PARA EL DUEÑO
-def terminal_gerencia():
-    # URL para la oficina (Aura Púrpura)
-    return render_template('index.html', modo="admin", tasa=inventario["tasa"])
+def home():
+    # Detecta el rol desde la URL (?rol=admin)
+    rol = request.args.get('rol', 'vendedor')
+    return render_template('index.html', modo=rol, tasa=inventario["tasa"])
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -68,16 +35,33 @@ def upload():
         df.rename(columns=nuevas, inplace=True)
         
         inventario["df"] = df
-        inventario["ultima_actualizacion"] = datetime.now().strftime("%H:%M:%S")
-        return jsonify({"success": True, "mensaje": f"Inventario actualizado a las {inventario['ultima_actualizacion']}"})
+        return jsonify({"success": True, "mensaje": "Inventario Sincronizado para todas las terminales."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
 @app.route('/preguntar', methods=['POST'])
 def preguntar():
     data = request.json
-    resp = buscar_analisis(data.get("pregunta", ""), data.get("tasa", 325.40), data.get("modo_admin", False))
-    return jsonify({"respuesta": resp})
+    if inventario["df"] is None:
+        return jsonify({"respuesta": "Elena: El administrador aún no ha cargado el inventario hoy."})
+    
+    df = inventario["df"]
+    pregunta = data.get("pregunta", "").lower().replace("precio", "").strip()
+    modo_admin = data.get("modo_admin", False)
+    tasa = float(data.get("tasa", 325.40))
+
+    match = process.extractOne(pregunta, df['Producto'].astype(str).tolist(), processor=utils.default_process)
+    
+    if match and match[1] > 60:
+        f = df[df['Producto'] == match[0]].iloc[0]
+        if modo_admin:
+            m = ((f['Precio Venta'] - f['Costo']) / f['Precio Venta']) * 100 if f['Precio Venta'] > 0 else 0
+            res = f"📊 {match[0]} | Costo: ${f['Costo']:.2f} | Venta: ${f['Precio Venta']:.2f} | Margen: {m:.1f}% | Stock: {int(f['Stock Actual'])}"
+        else:
+            res = f"El {match[0]} cuesta {f['Precio Venta']*tasa:,.2f} BS (${f['Precio Venta']:,.2f} USD). Stock: {int(f['Stock Actual'])}."
+        return jsonify({"respuesta": res})
+
+    return jsonify({"respuesta": "Producto no encontrado."})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
