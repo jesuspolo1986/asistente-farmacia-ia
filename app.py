@@ -93,40 +93,86 @@ def preguntar():
 
 @app.route('/descargar-pdf', methods=['GET'])
 def descargar_pdf():
-    if inventario["df"] is None: return "Error", 400
+    if inventario["df"] is None: return "Error: No hay inventario cargado", 400
+    
     df = inventario["df"]
+    # Detectamos si el usuario pidió el reporte como administrador
     modo_admin = request.args.get('admin') == 'true'
+    hoy = datetime.now().strftime('%d/%m/%Y %H:%M')
     
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(190, 10, f"REPORTE DE FARMACIA - {'MODO AUDITOR' if modo_admin else 'CATÁLOGO'}", ln=True, align='C')
     
-    pdf.set_font("Arial", 'B', 10)
+    # --- ENCABEZADO ---
+    pdf.set_font("Arial", 'B', 16)
+    pdf.set_text_color(33, 37, 41)
+    pdf.cell(190, 15, f"REPORTE GERENCIAL: {'AUDITORÍA INTERNA' if modo_admin else 'CATÁLOGO DE PRODUCTOS'}", ln=True, align='C')
+    
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(190, 10, f"Fecha de emisión: {hoy} | Rubro: Farmacia", ln=True, align='C')
     pdf.ln(5)
-    # Encabezados
-    headers = ["Producto", "Precio (USD)", "Stock"]
-    if modo_admin: headers += ["Costo", "Margen %"]
+
+    # --- RESUMEN FINANCIERO (SOLO ADMIN) ---
+    if modo_admin:
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font("Arial", 'B', 11)
+        pdf.cell(190, 10, "  RESUMEN FINANCIERO DE EXISTENCIAS", 1, ln=True, fill=True)
+        
+        pdf.set_font("Arial", '', 10)
+        inv_total = (df['Stock Actual'] * df['Costo']).sum()
+        venta_total = (df['Stock Actual'] * df['Precio Venta']).sum()
+        utilidad_est = venta_total - inv_total
+        
+        pdf.cell(95, 10, f" Inversión Total: ${inv_total:,.2f}", 1)
+        pdf.cell(95, 10, f" Ganancia Proyectada: ${utilidad_est:,.2f}", 1, ln=True)
+        pdf.ln(5)
+
+    # --- TABLA DE DATOS ---
+    # Ajustamos el ancho de columnas según el modo
+    col_pro = 70 if modo_admin else 100
+    col_pre = 30 if modo_admin else 45
+    col_sto = 30 if modo_admin else 45
+    col_cos = 30 # Solo admin
+    col_mar = 30 # Solo admin
+
+    # Headers
+    pdf.set_fill_color(0, 51, 102) # Azul oscuro
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", 'B', 10)
     
-    for h in headers: pdf.cell(38 if modo_admin else 63, 10, h, 1)
+    pdf.cell(col_pro, 10, " Producto", 1, 0, 'L', True)
+    pdf.cell(col_pre, 10, " Precio", 1, 0, 'C', True)
+    pdf.cell(col_sto, 10, " Stock", 1, 0, 'C', True)
+    if modo_admin:
+        pdf.cell(col_cos, 10, " Costo", 1, 0, 'C', True)
+        pdf.cell(col_mar, 10, " Margen %", 1, 0, 'C', True)
     pdf.ln()
-    
+
+    # Filas
+    pdf.set_text_color(0, 0, 0)
     pdf.set_font("Arial", '', 9)
     for _, fila in df.iterrows():
-        pdf.cell(38 if modo_admin else 63, 10, str(fila['Producto'])[:20], 1)
-        pdf.cell(38 if modo_admin else 63, 10, f"${fila['Precio Venta']:.2f}", 1)
-        pdf.cell(38 if modo_admin else 63, 10, str(fila['Stock Actual']), 1)
+        # Truncar nombre si es muy largo
+        nombre = str(fila['Producto'])[:25]
+        pdf.cell(col_pro, 8, f" {nombre}", 1)
+        pdf.cell(col_pre, 8, f"${fila['Precio Venta']:,.2f}", 1, 0, 'C')
+        pdf.cell(col_sto, 8, str(int(fila['Stock Actual'])), 1, 0, 'C')
+        
         if modo_admin:
             m = ((fila['Precio Venta'] - fila['Costo']) / fila['Precio Venta']) * 100
-            pdf.cell(38, 10, f"${fila['Costo']:.2f}", 1)
-            pdf.cell(38, 10, f"{m:.1f}%", 1)
+            pdf.cell(col_cos, 8, f"${fila['Costo']:,.2f}", 1, 0, 'C')
+            pdf.cell(col_mar, 8, f"{m:.1f}%", 1, 0, 'C')
         pdf.ln()
 
-    output = io.BytesIO()
-    pdf_string = pdf.output(dest='S').encode('latin-1')
-    output.write(pdf_string)
-    output.seek(0)
-    return send_file(output, as_attachment=True, download_name="Reporte_Farmacia.pdf")
+    # --- PIE DE PÁGINA ---
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(190, 10, "Este documento es una proyección analítica generada por Elena AI - Gestión Senior.", 0, 0, 'C')
 
+    output = io.BytesIO()
+    pdf_out = pdf.output(dest='S').encode('latin-1')
+    output.write(pdf_out)
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name="Reporte_Gerencial_Elena.pdf", mimetype='application/pdf')
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
