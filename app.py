@@ -9,38 +9,21 @@ from fpdf import FPDF
 app = Flask(__name__)
 
 # --- MEMORIA DE TRABAJO ---
-inventario = {"df": None, "tasa": 325.40, "rubro": "General"}
+inventario = {"df": None, "tasa": 325.40, "rubro": "Farmacia"}
 
-# --- CONFIGURACIÓN UNIVERSAL (SINÓNIMOS) ---
 MAPEO_COLUMNAS = {
-    'Producto': ['producto', 'descripcion', 'nombre', 'articulo', 'item', 'desc', 'modelo'],
-    'Precio Venta': ['precio venta', 'pvp', 'precio', 'venta', 'precio_unitario', 'p.unitario'],
-    'Costo': ['costo', 'compra', 'p.costo', 'costo_u'],
-    'Stock Actual': ['stock actual', 'stock', 'cantidad', 'existencia', 'cant', 'disponible'],
-    'Stock Mínimo': ['stock mínimo', 'minimo', 'alerta', 'mínimo', 'reorden'],
-    'Vencimiento': ['vencimiento', 'vence', 'expiracion', 'f_vencimiento', 'fecha_venc'],
-    'Vendedor': ['vendedor', 'ejecutivo', 'asesor', 'empleado'],
-    'Total': ['total', 'subtotal', 'monto_venta', 'monto'],
-    'Ubicación': ['ubicación', 'estante', 'pasillo', 'localizacion', 'donde']
+    'Producto': ['producto', 'descripcion', 'nombre', 'articulo', 'item'],
+    'Precio Venta': ['precio venta', 'pvp', 'precio', 'venta', 'precio_unitario'],
+    'Costo': ['costo', 'compra', 'p.costo'],
+    'Stock Actual': ['stock actual', 'stock', 'cantidad', 'existencia'],
+    'Stock Mínimo': ['stock mínimo', 'minimo', 'reorden'],
+    'Vencimiento': ['vencimiento', 'vence', 'expiracion'],
+    'Ubicación': ['ubicación', 'estante', 'pasillo', 'deposito']
 }
 
-def detectar_rubro(df):
-    cols = [str(c).lower() for c in df.columns]
-    if any(p in " ".join(cols) for p in ['vencimiento', 'mg', 'lote', 'sanitario']): return "Farmacia"
-    if any(p in " ".join(cols) for p in ['talla', 'color', 'talle', 'marca']): return "Ropa/Calzado"
-    if any(p in " ".join(cols) for p in ['vendedor', 'total', 'cliente']): return "Ventas/Gerencia"
-    return "Comercio General"
-
-def limpiar_pregunta(texto):
-    texto = texto.lower()
-    frases = ["cuanto cuesta", "dame el precio de", "reporte de", "estatus de", "analisis de", "precio del"]
-    for f in frases: texto = texto.replace(f, "")
-    return texto.strip()
-
-# --- MOTOR DE INTELIGENCIA FUSIONADO ---
+# --- LÓGICA DE INTELIGENCIA ---
 def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
-    if inventario["df"] is None: 
-        return "Elena: Por favor, sincronice el inventario de la farmacia primero."
+    if inventario["df"] is None: return "Elena: Sincronice el archivo primero."
     
     df = inventario["df"]
     tasa = float(tasa_recibida)
@@ -48,43 +31,40 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
     hoy = datetime.now()
 
     if modo_admin:
-        # 1. Alerta de Vencidos
+        # 1. Comandos Globales Admin
         if any(x in p_limpia for x in ["vencido", "caducado", "vence", "auditar"]):
             vencidos = df[pd.to_datetime(df['Vencimiento'], errors='coerce') < hoy]
-            if vencidos.empty: 
-                return "Auditoría completada: No existen productos vencidos en los estantes."
+            if vencidos.empty: return "Auditoría: 0 productos vencidos."
             perdida = (vencidos['Stock Actual'] * vencidos['Costo']).sum()
-            lista = ", ".join(vencidos['Producto'].head(5).tolist())
-            return (f"¡Alerta de Gestión! Tenemos {len(vencidos)} productos vencidos (ej: {lista}). "
-                    f"Esto representa una pérdida de ${perdida:,.2f}.")
+            return f"🚨 [ADMIN] {len(vencidos)} vencidos. Pérdida total: ${perdida:,.2f} USD."
 
-        # 2. Análisis de Reposición
-        if any(x in p_limpia for x in ["falta", "comprar", "invertir", "stock bajo", "pedido"]):
-            faltantes = df[df['Stock Actual'] <= df['Stock Mínimo']].copy()
-            if faltantes.empty: return "El inventario está full."
-            faltantes['Faltante'] = faltantes['Stock Mínimo'] - faltantes['Stock Actual']
-            inv_usd = (faltantes['Faltante'] * faltantes['Costo']).sum()
-            return f"Informe: Faltan {len(faltantes)} items. Inversión: ${inv_usd:,.2f} USD."
+        # 2. Búsqueda de producto con MARGEN
+        prod_buscado = limpiar_pregunta(pregunta_original)
+        match = process.extractOne(prod_buscado, df['Producto'].astype(str).tolist(), processor=utils.default_process)
+        
+        if match and match[1] > 60:
+            f = df[df['Producto'] == match[0]].iloc[0]
+            margen = ((f['Precio Venta'] - f['Costo']) / f['Precio Venta']) * 100
+            return (f"📊 [AUDITORÍA] {match[0]}\n"
+                    f"Costo: ${f['Costo']:.2f} | Venta: ${f['Precio Venta']:.2f}\n"
+                    f"Margen: {margen:.1f}% | Stock: {f['Stock Actual']}")
 
-    # MODO USUARIO
+    # MODO USUARIO (Solo precios)
     prod_buscado = limpiar_pregunta(pregunta_original)
-    productos = df['Producto'].astype(str).tolist()
-    match = process.extractOne(prod_buscado, productos, processor=utils.default_process)
-    
+    match = process.extractOne(prod_buscado, df['Producto'].astype(str).tolist(), processor=utils.default_process)
     if match and match[1] > 60:
-        fila = df[df['Producto'] == match[0]].iloc[0]
-        p_usd = float(fila['Precio Venta'])
-        stock = int(fila['Stock Actual'])
-        if stock <= 0: return f"El producto {match[0]} está agotado."
-        return f"El {match[0]} cuesta {p_usd * tasa:,.2f} BS (${p_usd:,.2f} USD). Stock: {stock}."
+        f = df[df['Producto'] == match[0]].iloc[0]
+        return f"El {match[0]} cuesta {f['Precio Venta']*tasa:,.2f} BS (${f['Precio Venta']:,.2f} USD)."
 
-    return "No encontré ese medicamento."
+    return "Producto no encontrado."
 
-# --- RUTAS FLASK (CORREGIDAS) ---
+def limpiar_pregunta(t):
+    for f in ["precio", "cuanto cuesta", "dame el"]: t = t.lower().replace(f, "")
+    return t.strip()
 
+# --- RUTAS ---
 @app.route('/')
-def index(): 
-    return render_template('index.html', tasa=inventario["tasa"])
+def index(): return render_template('index.html', tasa=inventario["tasa"])
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -94,21 +74,16 @@ def upload():
         stream = io.BytesIO(file.read())
         df = pd.read_excel(stream) if file.filename.endswith(('.xlsx', '.xls')) else pd.read_csv(stream)
         
-        # Normalizar nombres de columnas
-        columnas_reales = {col: str(col).strip().lower() for col in df.columns}
-        nuevas_cols = {}
-        for estandar, sinonimos in MAPEO_COLUMNAS.items():
-            for col_real, col_limpia in columnas_reales.items():
-                if col_limpia in sinonimos:
-                    nuevas_cols[col_real] = estandar
-                    break
-        df.rename(columns=nuevas_cols, inplace=True)
+        # Mapeo
+        nuevas = {}
+        for est, sin in MAPEO_COLUMNAS.items():
+            for c in df.columns:
+                if str(c).lower().strip() in sin: nuevas[c] = est
+        df.rename(columns=nuevas, inplace=True)
         
-        inventario["rubro"] = detectar_rubro(df)
         inventario["df"] = df
-        return jsonify({"success": True, "mensaje": f"Sincronizado: Rubro {inventario['rubro']}"})
-    except Exception as e: 
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": True, "mensaje": "Inventario Farmacia Sincronizado"})
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route('/preguntar', methods=['POST'])
 def preguntar():
@@ -116,6 +91,42 @@ def preguntar():
     resp = buscar_analisis_senior(data.get("pregunta", ""), data.get("tasa", 325.40), data.get("modo_admin", False))
     return jsonify({"respuesta_asistente": resp})
 
+@app.route('/descargar-pdf', methods=['GET'])
+def descargar_pdf():
+    if inventario["df"] is None: return "Error", 400
+    df = inventario["df"]
+    modo_admin = request.args.get('admin') == 'true'
+    
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(190, 10, f"REPORTE DE FARMACIA - {'MODO AUDITOR' if modo_admin else 'CATÁLOGO'}", ln=True, align='C')
+    
+    pdf.set_font("Arial", 'B', 10)
+    pdf.ln(5)
+    # Encabezados
+    headers = ["Producto", "Precio (USD)", "Stock"]
+    if modo_admin: headers += ["Costo", "Margen %"]
+    
+    for h in headers: pdf.cell(38 if modo_admin else 63, 10, h, 1)
+    pdf.ln()
+    
+    pdf.set_font("Arial", '', 9)
+    for _, fila in df.iterrows():
+        pdf.cell(38 if modo_admin else 63, 10, str(fila['Producto'])[:20], 1)
+        pdf.cell(38 if modo_admin else 63, 10, f"${fila['Precio Venta']:.2f}", 1)
+        pdf.cell(38 if modo_admin else 63, 10, str(fila['Stock Actual']), 1)
+        if modo_admin:
+            m = ((fila['Precio Venta'] - fila['Costo']) / fila['Precio Venta']) * 100
+            pdf.cell(38, 10, f"${fila['Costo']:.2f}", 1)
+            pdf.cell(38, 10, f"{m:.1f}%", 1)
+        pdf.ln()
+
+    output = io.BytesIO()
+    pdf_string = pdf.output(dest='S').encode('latin-1')
+    output.write(pdf_string)
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name="Reporte_Farmacia.pdf")
+
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
