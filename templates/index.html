@@ -3,140 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elena AI - Gestión de Farmacia</title>
+    <title>Elena AI | Digital Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {
-            --primary: #003366;
-            --secondary: #00a8cc;
+        :root { 
+            --primary: #00d2ff; 
+            --secondary: #3a7bd5; 
+            --admin-glow: #8e2de2; 
+            --bg: #0f172a; 
             --admin-color: #d9534f;
-            --bg: #f4f7f6;
-            --success: #28a745;
+        }
+        
+        body { 
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: white; font-family: 'Inter', -apple-system, sans-serif; 
+            min-height: 100vh; display: flex; align-items: center; justify-content: center; 
+            margin: 0; padding: 15px;
         }
 
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        
-        .controls { display: flex; gap: 15px; align-items: center; }
+        .main-container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 40px; 
+            padding: 2.5rem; width: 100%; max-width: 450px; text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: all 0.4s ease;
+            max-height: 95vh; overflow-y: auto; display: flex; flex-direction: column;
+        }
 
-        .tasa-widget { background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 8px; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.2); }
-        .tasa-widget input { background: transparent; border: none; color: white; width: 65px; font-weight: bold; font-size: 1rem; outline: none; border-bottom: 1px solid white; }
+        /* Núcleo de Aura */
+        .elena-aura {
+            position: relative; width: 150px; height: 150px;
+            margin: 1.5rem auto; cursor: pointer; flex-shrink: 0;
+        }
 
-        /* Estado de Sesión */
-        #status-badge { font-size: 0.7rem; padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.2); text-transform: uppercase; letter-spacing: 1px; }
-        .status-admin { background: var(--admin-color) !important; box-shadow: 0 0 10px rgba(217, 83, 79, 0.5); }
+        .aura-core {
+            position: absolute; inset: 0;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border-radius: 50%; filter: blur(2px);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 40px rgba(0, 210, 255, 0.5);
+        }
 
-        #chat-container { flex: 1; overflow-y: auto; padding: 2rem; display: flex; flex-direction: column; gap: 12px; }
-        .message { max-width: 75%; padding: 12px 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.4; animation: fadeIn 0.3s ease; }
-        .user-message { align-self: flex-end; background: var(--secondary); color: white; border-bottom-right-radius: 2px; }
-        .elena-message { align-self: flex-start; background: white; color: #333; border-bottom-left-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #eee; }
-        .admin-msg { border-left: 4px solid var(--admin-color); background: #fffcfc; }
+        .aura-ring {
+            position: absolute; inset: -15px;
+            border: 2px solid rgba(0, 210, 255, 0.2);
+            border-radius: 50%; animation: pulse-ring 2.5s infinite;
+        }
 
-        .input-area { background: white; padding: 1rem 2rem; display: flex; gap: 10px; align-items: center; border-top: 1px solid #eee; }
-        #userInput { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; outline: none; font-size: 0.95rem; }
-        
-        button { border: none; border-radius: 20px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
-        .btn-send { background: var(--primary); color: white; padding: 10px 20px; }
-        .btn-tool { background: #eee; color: #444; padding: 8px 15px; font-size: 0.85rem; }
-        .btn-tool:hover { background: #ddd; }
-        
-        /* Ocultar botones de reporte si no es admin */
-        .admin-only { display: none; }
+        /* Estados Dinámicos */
+        .listening .aura-core {
+            animation: morph 1.2s infinite alternate ease-in-out;
+            background: linear-gradient(45deg, #ff0080, #ff8c00);
+            box-shadow: 0 0 60px rgba(255, 0, 128, 0.6);
+        }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .admin-mode .aura-core {
+            background: linear-gradient(45deg, #8e2de2, #4a00e0);
+            box-shadow: 0 0 50px rgba(142, 45, 226, 0.5);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+
+        @keyframes morph {
+            0% { border-radius: 50%; transform: scale(1); }
+            100% { border-radius: 35% 65% 65% 35% / 35% 35% 65% 65%; transform: scale(1.15); }
+        }
+
+        .response-box {
+            font-size: 1.1rem; min-height: 90px; margin: 1rem 0;
+            font-weight: 300; letter-spacing: 0.5px; line-height: 1.4;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .status-badge {
+            background: rgba(255,255,255,0.08); padding: 5px 15px;
+            border-radius: 20px; font-size: 0.7rem; text-transform: uppercase;
+            letter-spacing: 2px; color: var(--primary); border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .tasa-input {
+            background: transparent; border: none; border-bottom: 1px solid var(--primary);
+            color: white; width: 60px; text-align: center; font-weight: bold; outline: none;
+        }
+
+        .btn-action {
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+            color: white; padding: 12px; border-radius: 15px; font-size: 0.85rem;
+            transition: 0.3s; width: 100%; margin-top: 10px; font-weight: 500;
+        }
+
+        .btn-action:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
+
+        .chat-input-aura {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px; color: white; padding: 10px 20px; width: 100%; outline: none;
+            margin-top: 20px; font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
 
-<header>
-    <div>
-        <h2 style="margin:0"><i class="fas fa-prescription-bottle-alt"></i> ELENA AI</h2>
-        <span id="status-badge">Modo Asesor de Ventas</span>
+<div class="main-container" id="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="status-badge">BS/USD: <input type="number" id="tasaInput" class="tasa-input" value="325.40" step="0.1"></div>
+        <div id="adminLabel" class="status-badge" style="color: #666; border-color: transparent;">Vendedor</div>
     </div>
-    <div class="controls">
-        <div class="tasa-widget">
-            <span style="font-size: 0.7rem;">BS/USD</span>
-            <input type="number" id="tasaInput" value="325.40" step="0.1">
-        </div>
-        <input type="file" id="fileInput" hidden onchange="subirArchivo()">
-        <button class="btn-tool" onclick="document.getElementById('fileInput').click()"><i class="fas fa-upload"></i></button>
-        <button id="btnReporte" class="btn-tool admin-only" onclick="descargarReporte()"><i class="fas fa-file-pdf"></i> PDF Auditoría</button>
+
+    <div class="elena-aura" id="auraBtn" onclick="toggleListening()">
+        <div class="aura-ring"></div>
+        <div class="aura-core"></div>
     </div>
-</header>
 
-<div id="chat-container">
-    <div class="message elena-message">Hola, soy tu asesora de ventas. Puedes consultarme disponibilidad y precios en Bolívares.</div>
-</div>
+    <h3 class="fw-bold mb-0" style="letter-spacing: 2px;">ELENA AI</h3>
+    <p class="text-white-50 small mb-2" id="modeSub" style="font-size: 0.7rem; letter-spacing: 1px;">CONSULTORÍA SENIOR</p>
 
-<div class="input-area">
-    <input type="text" id="userInput" placeholder="Escriba su consulta aquí..." onkeypress="if(event.key==='Enter') enviar()">
-    <button class="btn-send" onclick="enviar()"><i class="fas fa-paper-plane"></i></button>
+    <div class="response-box" id="elenaResponse">
+        Toque el núcleo para hablar o escriba abajo
+    </div>
+
+    <div id="controls">
+        <button id="pdfBtn" class="btn-action" style="display:none;" onclick="descargarPDF()">📄 DESCARGAR AUDITORÍA PDF</button>
+        <button id="waBtn" class="btn-action" style="display:none; border-color: #25d366; color: #25d366;" onclick="enviarWA()">📱 ENVIAR PRESUPUESTO</button>
+    </div>
+
+    <input type="text" id="manualInput" class="chat-input-aura" placeholder="Escriba aquí..." onkeypress="if(event.key==='Enter') procesarTexto()">
+
+    <input type="file" id="inventoryFile" hidden onchange="processUpload()">
+    <button class="btn btn-link btn-sm text-white-50 text-decoration-none mt-4" style="font-size: 0.65rem;" onclick="document.getElementById('inventoryFile').click()">ACTUALIZAR INVENTARIO</button>
 </div>
 
 <script>
-    const chat = document.getElementById('chat-container');
+    const synth = window.speechSynthesis;
     let modoAdminActivo = false;
-    const CLAVE_SECRETA = "elena-oficina-2026"; // Esta es la llave
+    const CLAVE_SECRETA = "elena-oficina-2026"; 
 
-    async function subirArchivo() {
-        const file = document.getElementById('fileInput').files[0];
-        if(!file) return;
-        const formData = new FormData();
-        formData.append('file', file);
-        appendMessage("Elena", "Sincronizando inventario...", "elena-message");
-        const res = await fetch('/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-        appendMessage("Elena", data.mensaje || data.error, "elena-message");
+    function hablar(texto) {
+        synth.cancel();
+        const u = new SpeechSynthesisUtterance(texto);
+        u.lang = 'es-MX'; u.rate = 1;
+        synth.speak(u);
     }
 
-    async function enviar() {
-        const input = document.getElementById('userInput');
-        const text = input.value.trim();
-        const tasa = document.getElementById('tasaInput').value;
-        
-        if(!text) return;
+    async function procesarTexto() {
+        const input = document.getElementById('manualInput');
+        const query = input.value.trim();
+        if(!query) return;
 
-        // Lógica de desbloqueo interna
-        if(text.toLowerCase() === CLAVE_SECRETA) {
+        // Comprobar clave secreta
+        if(query.toLowerCase() === CLAVE_SECRETA) {
             activarModoGerencia();
             input.value = "";
             return;
         }
 
-        appendMessage("Tú", text, "user-message");
+        enviarConsulta(query);
         input.value = "";
-
-        const res = await fetch('/preguntar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ pregunta: text, tasa: parseFloat(tasa), modo_admin: modoAdminActivo })
-        });
-        const data = await res.json();
-        
-        appendMessage("Elena", data.respuesta_asistente, "elena-message" + (modoAdminActivo ? " admin-msg" : ""));
     }
 
     function activarModoGerencia() {
         modoAdminActivo = true;
-        document.getElementById('status-badge').innerText = "Modo Gestión Senior";
-        document.getElementById('status-badge').classList.add('status-admin');
-        document.getElementById('btnReporte').style.display = "flex";
-        appendMessage("Elena", "🔐 Acceso concedido. Modo Auditoría Senior activado. Ahora puede ver márgenes, costos y descargar reportes financieros.", "elena-message admin-msg");
+        document.getElementById('container').classList.add('admin-mode');
+        document.getElementById('modeSub').innerText = "GESTIÓN DE NEGOCIOS SENIOR";
+        document.getElementById('adminLabel').innerText = "GERENCIA";
+        document.getElementById('adminLabel').style.color = "#8e2de2";
+        document.getElementById('pdfBtn').style.display = 'block';
+        document.getElementById('elenaResponse').innerText = "Modo Oficina activado. ¿Qué auditoría financiera realizaremos?";
+        hablar("Acceso concedido. Iniciando modo de gestión senior.");
     }
 
-    function descargarReporte() {
-        window.location.href = `/descargar-pdf?admin=${modoAdminActivo}`;
+    async function enviarConsulta(query) {
+        const tasaActual = document.getElementById('tasaInput').value;
+        document.getElementById('elenaResponse').innerText = "Elena pensando...";
+        
+        const res = await fetch('/preguntar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pregunta: query, tasa: tasaActual, modo_admin: modoAdminActivo })
+        });
+        const data = await res.json();
+        const resp = data.respuesta_asistente;
+        
+        document.getElementById('elenaResponse').innerText = resp;
+        hablar(resp);
+        
+        if(!modoAdminActivo && !resp.includes("no está disponible")) {
+            document.getElementById('waBtn').style.display = 'block';
+        }
     }
 
-    function appendMessage(sender, text, className) {
-        const msg = document.createElement('div');
-        msg.className = "message " + className;
-        msg.innerText = text;
-        chat.appendChild(msg);
-        chat.scrollTop = chat.scrollHeight;
+    function toggleListening() {
+        const recognition = new (window.webkitSpeechRecognition || window.SpeechRecognition)();
+        recognition.lang = 'es-ES';
+        recognition.onstart = () => document.getElementById('auraBtn').classList.add('listening');
+        recognition.onend = () => document.getElementById('auraBtn').classList.remove('listening');
+        recognition.onresult = (e) => enviarConsulta(e.results[0][0].transcript);
+        recognition.start();
+    }
+
+    function descargarPDF() { window.location.href = `/descargar-pdf?admin=${modoAdminActivo}`; }
+    function enviarWA() { 
+        const resp = document.getElementById('elenaResponse').innerText;
+        window.open(`https://wa.me/?text=${encodeURIComponent("*Presupuesto Elena AI:*\n" + resp)}`, '_blank'); 
+    }
+
+    async function processUpload() {
+        const fd = new FormData();
+        fd.append('file', document.getElementById('inventoryFile').files[0]);
+        const res = await fetch('/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        document.getElementById('elenaResponse').innerText = "Inventario Sincronizado.";
+        hablar("Sistema actualizado.");
     }
 </script>
-
 </body>
 </html>
