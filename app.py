@@ -15,9 +15,9 @@ def limpiar_pregunta(texto):
     frases = ["cuanto cuesta", "dame el precio de", "reporte de", "estatus de", "analisis de", "precio del"]
     for f in frases: texto = texto.replace(f, "")
     return texto.strip()
-
 def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
-    if inventario["df"] is None: return "Elena: Por favor, sincronice el inventario primero."
+    if inventario["df"] is None: 
+        return "Elena: Por favor, sincronice el inventario primero."
     
     tasa = float(tasa_recibida)
     inventario["tasa"] = tasa 
@@ -26,38 +26,42 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
     hoy = datetime.now()
 
     # ==========================================================
-    # LÓGICA DE COMANDOS GLOBALES (SOLO MODO ADMINISTRATIVO)
+    # LÓGICA ESTRATÉGICA (SOLO MODO ADMINISTRATIVO)
     # ==========================================================
     if modo_admin:
-        # 1. Comando para VENCIDOS
+        # 1. Comando para VENDEDORES / TICKET PROMEDIO (AI Pro Analyst)
+        if any(p in pregunta_limpia for p in ["vendedor", "promedio", "quién vendió"]):
+            if 'Vendedor' not in df.columns: return "No encuentro la columna de Vendedores en este archivo."
+            stats = df.groupby('Vendedor')['Total'].agg(['mean', 'sum', 'count']).sort_values(by='sum', ascending=False)
+            top_v = stats.index[0]
+            return (f"Análisis listo. El líder es {top_v} con ${stats.loc[top_v, 'sum']:,.2f} vendidos. "
+                    f"Su ticket promedio es de ${stats.loc[top_v, 'mean']:,.2f}.")
+
+        # 2. Comando para PRODUCTO ESTRELLA / PARETO (AI Pro Analyst)
+        if any(p in pregunta_limpia for p in ["rentable", "pareto", "estrella", "más vendido"]):
+            # Si es archivo de ventas (tiene columna Total), si no, usamos Valor de Inventario
+            col_valor = 'Total' if 'Total' in df.columns else 'Precio Venta'
+            pareto = df.groupby('Producto')[col_valor].sum().sort_values(ascending=False)
+            top_p = pareto.index[0]
+            return f"El producto estrella es {top_p}, con un valor total de ${pareto.iloc[0]:,.2f}."
+
+        # 3. Comando para VENCIDOS (Farmacia)
         if "vencido" in pregunta_limpia or "vencidos" in pregunta_limpia:
             vencidos_df = df[pd.to_datetime(df['Vencimiento']) < hoy]
-            if vencidos_df.empty: return "Excelente, no hay productos vencidos en sistema."
-            lista = ", ".join(vencidos_df['Producto'].tolist())
-            return f"Alerta de Auditoría: Tenemos vencidos: {lista}. Revise el PDF para ubicarlos."
+            if vencidos_df.empty: return "Excelente, no hay productos vencidos."
+            lista = ", ".join(vencidos_df['Producto'].head(5).tolist())
+            return f"Alerta: Tenemos productos vencidos como: {lista}."
 
-        # 2. Comando para FALTANTES / STOCK BAJO con Cálculo de Inversión
-        if any(palabra in pregunta_limpia for palabra in ["falta", "stock bajo", "reposición", "comprar", "invertir", "agotarse", "pedir", "faltantes"]):
-            # Filtramos los que están en el mínimo o por debajo
+        # 4. Comando para FALTANTES / INVERSIÓN (Farmacia)
+        if any(palabra in pregunta_limpia for palabra in ["falta", "stock bajo", "reposición", "comprar", "invertir", "agotarse"]):
             faltantes_df = df[df['Stock Actual'] <= df['Stock Mínimo']].copy()
-            
-            if faltantes_df.empty: 
-                return "El inventario está completo según los niveles mínimos establecidos."
-            
-            # Cálculo de inversión necesaria para llegar al nivel óptimo (mínimo)
+            if faltantes_df.empty: return "Niveles de stock óptimos."
             faltantes_df['Diferencia'] = faltantes_df['Stock Mínimo'] - faltantes_df['Stock Actual']
-            inversion_usd = (faltantes_df['Diferencia'] * faltantes_df['Costo']).sum()
-            inversion_bs = inversion_usd * tasa
-            
-            # Preparamos la respuesta de voz con los 3 más urgentes
-            lista_f = ", ".join(faltantes_df['Producto'].head(3).tolist())
-            
-            return (f"Atención: Faltan {len(faltantes_df)} productos. Necesitamos invertir "
-                    f"{inversion_usd:,.2f} dólares ({inversion_bs:,.2f} bolívares) para reponer el stock mínimo. "
-                    f"Los principales son: {lista_f}. Revise el PDF para el detalle completo.")
+            inv_usd = (faltantes_df['Diferencia'] * faltantes_df['Costo']).sum()
+            return f"Atención: Faltan {len(faltantes_df)} productos. Inversión necesaria: {inv_usd:,.2f} USD."
 
     # ==========================================================
-    # BÚSQUEDA DE PRODUCTO INDIVIDUAL (MATCHING)
+    # BÚSQUEDA DE PRODUCTO INDIVIDUAL (PÚBLICO Y ADMIN)
     # ==========================================================
     producto_buscado = limpiar_pregunta(pregunta_original)
     productos = df['Producto'].astype(str).tolist()
@@ -67,31 +71,17 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
         fila = df[df['Producto'] == match[0]].iloc[0]
         precio_usd = float(fila['Precio Venta'])
         precio_bs = precio_usd * tasa
-        costo_usd = float(fila['Costo'])
-        stock = int(fila['Stock Actual'])
-        minimo = int(fila['Stock Mínimo'])
-
-        # Cálculo de Pareto y Margen
-        df['Valor_Inv'] = df['Stock Actual'] * df['Precio Venta']
-        umbral_pareto = df['Valor_Inv'].quantile(0.8)
-        es_pareto = "⭐ PARETO A" if (stock * precio_usd) >= umbral_pareto else "Clase B/C"
-        vencido = datetime.strptime(str(fila['Vencimiento']), '%Y-%m-%d') < hoy
-        margen = ((precio_usd - costo_usd) / precio_usd) * 100
-
+        
         if not modo_admin:
-            if vencido: return f"El producto {match[0]} no está disponible por el momento."
-            return f"El valor de {match[0]} es {precio_bs:,.2f} BS ({precio_usd} USD)."
+            # Respuesta rápida para cliente
+            return f"El valor de {match[0]} es {precio_bs:,.2f} BS ({precio_usd:,.2f} USD)."
         else:
-            rec = "✅ ÓPTIMO"
-            if vencido: rec = "❌ VENCIDO"
-            elif stock <= minimo: rec = "⚠️ REPONER"
-            elif stock > (minimo * 3): rec = "📦 SOBRE-STOCK"
-            
-            return (f"AUDITORÍA: {match[0]} ({es_pareto}). "
-                    f"Margen: {margen:.1f}%. Stock: {stock}. "
-                    f"Ubicación: {fila['Ubicación']}. Predicción: {rec}")
-    
-    return "Elena: No logré identificar el producto o comando de auditoría."
+            # Respuesta detallada para el dueño
+            costo = float(fila['Costo'])
+            margen = ((precio_usd - costo) / precio_usd) * 100
+            return f"Auditoría de {match[0]}: Precio {precio_usd} USD, Costo {costo} USD. Margen: {margen:.1f}%. Stock: {fila['Stock Actual']}."
+
+    return "No logré identificar el producto o el comando de auditoría."gré identificar el comando estratégico. Prueba con: '¿Quién es el mejor vendedor?' o '¿Cuál es el producto más rentable?'"
 @app.route('/')
 def index(): return render_template('index.html', tasa=inventario["tasa"])
 
