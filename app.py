@@ -34,14 +34,12 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
     hoy = datetime.now()
 
     if modo_admin:
-        # Comandos Globales Admin
         if any(x in p_limpia for x in ["vencido", "caducado", "vence", "auditar"]):
             vencidos = df[pd.to_datetime(df['Vencimiento'], errors='coerce') < hoy]
             if vencidos.empty: return "Auditoría: 0 productos vencidos."
             perdida = (vencidos['Stock Actual'] * vencidos['Costo']).sum()
             return f"🚨 [ADMIN] {len(vencidos)} vencidos. Pérdida total: ${perdida:,.2f} USD."
 
-        # Búsqueda con margen
         prod_buscado = limpiar_pregunta(pregunta_original)
         match = process.extractOne(prod_buscado, df['Producto'].astype(str).tolist(), processor=utils.default_process)
         if match and match[1] > 60:
@@ -51,7 +49,6 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
                     f"Costo: ${f['Costo']:.2f} | Venta: ${f['Precio Venta']:.2f}\n"
                     f"Margen: {m:.1f}% | Stock: {int(f['Stock Actual'])}")
 
-    # MODO USUARIO
     prod_buscado = limpiar_pregunta(pregunta_original)
     match = process.extractOne(prod_buscado, df['Producto'].astype(str).tolist(), processor=utils.default_process)
     if match and match[1] > 60:
@@ -60,11 +57,11 @@ def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
 
     return "Producto no encontrado."
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index(): 
     return render_template('index.html', tasa=inventario["tasa"], modo_inicial="vendedor")
 
-@app.route('/gerencia')
+@app.route('/gerencia', methods=['GET'])
 def gerencia(): 
     return render_template('index.html', tasa=inventario["tasa"], modo_inicial="admin")
 
@@ -86,26 +83,6 @@ def preguntar():
     data = request.json
     resp = buscar_analisis_senior(data.get("pregunta", ""), data.get("tasa", 325.40), data.get("modo_admin", False))
     return jsonify({"respuesta_asistente": resp})
-
-@app.route('/descargar-pdf', methods=['GET'])
-def descargar_pdf():
-    if inventario["df"] is None: return "Error: Sin datos", 400
-    df = inventario["df"]
-    modo_admin = request.args.get('admin') == 'true'
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(190, 10, "REPORTE ELENA AI", ln=True, align='C')
-    pdf.set_font("Arial", '', 10)
-    for _, f in df.head(50).iterrows(): # Top 50 para evitar PDFs gigantes
-        pdf.cell(100, 8, str(f['Producto'])[:30], 1)
-        pdf.cell(45, 8, f"${f['Precio Venta']:.2f}", 1)
-        pdf.cell(45, 8, f"S: {int(f['Stock Actual'])}", 1, ln=True)
-    out = io.BytesIO()
-    pdf_out = pdf.output(dest='S').encode('latin-1')
-    out.write(pdf_out)
-    out.seek(0)
-    return send_file(out, as_attachment=True, download_name="Reporte.pdf", mimetype='application/pdf')
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))

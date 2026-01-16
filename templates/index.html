@@ -8,7 +8,7 @@
     <style>
         :root { --primary: #00d2ff; --admin: #8e2de2; }
         body { background: #0f172a; color: white; font-family: sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; overflow: hidden; }
-        .main-container { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 30px; padding: 2rem; width: 100%; max-width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .main-container { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 30px; padding: 2rem; width: 100%; max-width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.1); position: relative; }
         .elena-aura { width: 120px; height: 120px; margin: 1rem auto; position: relative; cursor: pointer; }
         .aura-core { inset: 0; position: absolute; border-radius: 50%; background: linear-gradient(45deg, var(--primary), #3a7bd5); transition: 0.5s; box-shadow: 0 0 30px rgba(0,210,255,0.3); }
         .admin-mode .aura-core { background: linear-gradient(45deg, var(--admin), #4a00e0); }
@@ -31,11 +31,17 @@
     </div>
 
     <h5 class="mb-0">ELENA AI</h5>
+    <p style="font-size:0.6rem; opacity:0.6;">{{ 'GESTIÓN FINANCIERA' if modo_inicial == 'admin' else 'ASESOR DE VENTAS' }}</p>
+
     <div class="response-box" id="elenaRes">Toca el núcleo para hablarme</div>
 
     <input type="text" id="userInput" class="chat-input" placeholder="O escribe aquí..." onkeypress="if(event.key==='Enter') enviar()">
+    
     <input type="file" id="fileIn" hidden onchange="subir()">
-    <button class="btn btn-link btn-sm text-white-50 mt-3 text-decoration-none" onclick="document.getElementById('fileIn').click()">Sincronizar Excel</button>
+    <div class="d-flex justify-content-center gap-2 mt-3">
+        <button class="btn btn-link btn-sm text-white-50 text-decoration-none" onclick="document.getElementById('fileIn').click()">Subir Excel</button>
+        <button class="btn btn-link btn-sm text-white-50 text-decoration-none" onclick="location.href=(modoAdmin ? '/' : '/gerencia')">Cambiar Modo</button>
+    </div>
 </div>
 
 <script>
@@ -43,7 +49,6 @@
     const synth = window.speechSynthesis;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
-    // Motor de Voz (Elena te habla)
     function hablar(t) {
         if(!t) return;
         synth.cancel();
@@ -52,43 +57,32 @@
         synth.speak(u);
     }
 
-    // Motor de Escucha (Tú le hablas a Elena)
     function iniciarEscucha() {
         if (!SpeechRecognition) {
-            alert("Tu navegador no soporta reconocimiento de voz. Usa Chrome.");
+            alert("Usa Chrome para hablar con Elena.");
             return;
         }
-
         const recognition = new SpeechRecognition();
         recognition.lang = 'es-ES';
-        
         recognition.onstart = () => {
             document.getElementById('aura').classList.add('listening');
-            document.getElementById('elenaRes').innerText = "Escuchando...";
+            document.getElementById('elenaRes').innerText = "Elena escuchando...";
         };
-
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            document.getElementById('userInput').value = transcript;
-            enviar(); // Envía automáticamente lo que escuchó
+        recognition.onresult = (e) => {
+            document.getElementById('userInput').value = e.results[0][0].transcript;
+            enviar();
         };
-
-        recognition.onend = () => {
-            document.getElementById('aura').classList.remove('listening');
-        };
-
+        recognition.onend = () => document.getElementById('aura').classList.remove('listening');
         recognition.start();
     }
 
     async function enviar() {
         const input = document.getElementById('userInput');
-        const text = input.value.trim();
-        if(!text) return;
-
+        if(!input.value.trim()) return;
         const res = await fetch('/preguntar', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ pregunta: text, tasa: document.getElementById('tasa').value, modo_admin: modoAdmin })
+            body: JSON.stringify({ pregunta: input.value, tasa: document.getElementById('tasa').value, modo_admin: modoAdmin })
         });
         const data = await res.json();
         document.getElementById('elenaRes').innerText = data.respuesta_asistente;
