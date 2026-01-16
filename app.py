@@ -6,7 +6,7 @@ from rapidfuzz import process, utils
 
 app = Flask(__name__)
 
-# Memoria global única
+# Memoria global sincronizada
 inventario = {"df": None, "tasa": 325.40}
 
 MAPEO_COLUMNAS = {
@@ -18,7 +18,6 @@ MAPEO_COLUMNAS = {
 
 @app.route('/')
 def home():
-    # Solo existe esta ruta, imposible que de 404
     return render_template('index.html', tasa=inventario["tasa"])
 
 @app.route('/preguntar', methods=['POST'])
@@ -27,12 +26,22 @@ def preguntar():
     pregunta = data.get("pregunta", "").lower().strip()
     modo_admin = data.get("modo_admin", False)
     
-    # CLAVE MAESTRA: Si el usuario escribe esto, Elena confirma el modo
+    # 1. COMANDO: Activar Admin
     if pregunta == "activar modo gerencia":
         return jsonify({"respuesta": "MODO_ADMIN_ACTIVADO"})
 
+    # 2. COMANDO: Actualizar Tasa (Solo si es Admin)
+    if modo_admin and "actualizar tasa a" in pregunta:
+        try:
+            nueva_tasa = float(pregunta.split("a")[-1].strip())
+            inventario["tasa"] = nueva_tasa
+            return jsonify({"respuesta": f"TASA_ACTUALIZADA", "valor": nueva_tasa})
+        except:
+            return jsonify({"respuesta": "Elena: No entendí el número de la tasa."})
+
+    # 3. Lógica de búsqueda normal
     if inventario["df"] is None:
-        return jsonify({"respuesta": "Elena: Inventario no cargado. Inicie sesión como admin para subir el archivo."})
+        return jsonify({"respuesta": "Elena: Inventario no cargado todavía."})
     
     df = inventario["df"]
     p_busqueda = pregunta.replace("precio", "").strip()
@@ -40,15 +49,16 @@ def preguntar():
     
     if match and match[1] > 60:
         f = df[df['Producto'] == match[0]].iloc[0]
-        tasa = float(data.get("tasa", 325.40))
+        # Usamos la tasa que está en memoria
+        tasa_actual = inventario["tasa"]
         if modo_admin:
             m = ((f['Precio Venta'] - f['Costo']) / f['Precio Venta']) * 100 if f['Precio Venta'] > 0 else 0
             res = f"📊 {match[0]} | Costo: ${f['Costo']:.2f} | Venta: ${f['Precio Venta']:.2f} | Margen: {m:.1f}% | Stock: {int(f['Stock Actual'])}"
         else:
-            res = f"El {match[0]} cuesta {f['Precio Venta']*tasa:,.2f} BS (${f['Precio Venta']:,.2f} USD). Stock: {int(f['Stock Actual'])}."
-        return jsonify({"respuesta": res})
+            res = f"El {match[0]} cuesta {f['Precio Venta']*tasa_actual:,.2f} BS (${f['Precio Venta']:,.2f} USD). Stock: {int(f['Stock Actual'])}."
+        return jsonify({"respuesta": res, "tasa_sync": tasa_actual})
 
-    return jsonify({"respuesta": "No encontré ese producto."})
+    return jsonify({"respuesta": "No encontré ese producto.", "tasa_sync": inventario["tasa"]})
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -60,7 +70,7 @@ def upload():
         nuevas = {c: est for est, sin in MAPEO_COLUMNAS.items() for c in df.columns if str(c).lower().strip() in sin}
         df.rename(columns=nuevas, inplace=True)
         inventario["df"] = df
-        return jsonify({"success": True, "mensaje": "Inventario sincronizado con éxito."})
+        return jsonify({"success": True, "mensaje": "Inventario sincronizado."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
