@@ -39,79 +39,66 @@ def limpiar_pregunta(texto):
 
 # --- MOTOR DE INTELIGENCIA FUSIONADO ---
 def buscar_analisis_senior(pregunta_original, tasa_recibida, modo_admin=False):
-    if inventario["df"] is None: 
-        return "Elena: Por favor, sube un archivo primero."
+    if inventario["df"] is None: return "Elena: Sincronice el archivo primero."
     
-    # --- INICIALIZACIÓN DE VARIABLES (CRÍTICO) ---
-    df = inventario["df"]
+    df = inventario["df"].copy() # Trabajamos sobre una copia
     tasa = float(tasa_recibida)
     p_limpia = pregunta_original.lower()
-    rubro = inventario.get("rubro", "General") # Evita error si rubro no existe
+    rubro = inventario.get("rubro", "General")
     hoy = datetime.now()
+
+    # --- 1. NORMALIZACIÓN DE EMERGENCIA (El "Sabelotodo") ---
+    mapeo_emergencia = {
+        'Producto': ['sku', 'empleado', 'ruta', 'articulo', 'item', 'nombre'],
+        'Total': ['ventas_netas', 'monto', 'subtotal', 'ingresos', 'sueldo'],
+        'Vendedor': ['conductor', 'asesor', 'ejecutivo', 'nombre_vendedor']
+    }
     
-    # --- BLOQUE DE SEGURIDAD CRÍTICO ---
-    if 'Producto' not in df.columns:
-        posibles_nombres = ['SKU', 'Empleado', 'Ruta', 'Articulo', 'Item', 'Nombre']
-        for p in posibles_nombres:
-            if p in df.columns:
-                df.rename(columns={p: 'Producto'}, inplace=True)
-                break
-        else:
-            # Si no hay coincidencias, la columna 0 será 'Producto'
-            df.rename(columns={df.columns[0]: 'Producto'}, inplace=True)
+    for estandar, sinonimos in mapeo_emergencia.items():
+        if estandar not in df.columns:
+            for col in df.columns:
+                if col.lower() in sinonimos:
+                    df.rename(columns={col: estandar}, inplace=True)
+                    break
+
+    # --- 2. CÁLCULO PROACTIVO (Si no hay Total, lo creamos) ---
+    if 'Total' not in df.columns and 'Cantidad' in df.columns and 'Precio_Unitario' in df.columns:
+        df['Total'] = df['Cantidad'] * df['Precio_Unitario']
 
     # ==========================================================
-    # LÓGICA ESTRATÉGICA (MODO ADMINISTRATIVO)
+    # LÓGICA DE RESPUESTA SENIOR
     # ==========================================================
     if modo_admin:
-        # 1. Ventas / Vendedores
-        if any(p in p_limpia for p in ["vendedor", "promedio", "quién vendió"]):
-            if 'Vendedor' in df.columns and 'Total' in df.columns:
-                stats = df.groupby('Vendedor')['Total'].agg(['mean', 'sum', 'count']).sort_values(by='sum', ascending=False)
-                top_v = stats.index[0]
-                return f"Líder en ventas: {top_v} con ${stats.loc[top_v, 'sum']:,.2f}. Promedio: ${stats.loc[top_v, 'mean']:,.2f}."
-            return "Este archivo no tiene columnas de 'Vendedor' y 'Total' para analizar."
-
-        # 2. Pareto (Usa 'Total' o en su defecto 'Precio Venta')
-        if any(p in p_limpia for p in ["rentable", "pareto", "estrella"]):
-            col_v = 'Total' if 'Total' in df.columns else ('Precio Venta' if 'Precio Venta' in df.columns else None)
-            if col_v:
-                pareto = df.groupby('Producto')[col_v].sum().sort_values(ascending=False)
-                return f"El producto estrella de tu {rubro} es {pareto.index[0]} con un valor de ${pareto.iloc[0]:,.2f}."
-            return "No hay datos numéricos de precio o total para calcular rentabilidad."
-
-        # 3. Farmacia / Vencidos
-        if "vencido" in p_limpia and 'Vencimiento' in df.columns:
-            vencidos_df = df[pd.to_datetime(df['Vencimiento'], errors='coerce') < hoy]
-            if vencidos_df.empty: return "Excelente, no hay productos vencidos."
-            lista = ", ".join(vencidos_df['Producto'].head(5).tolist())
-            return f"Alerta Sanitaria: Tenemos vencidos como {lista}."
+        # Análisis de Rendimiento (Vendedores/Conductores/Empleados)
+        if any(p in p_limpia for p in ["vendedor", "quién", "mejor", "conductor", "desempeño"]):
+            col_target = 'Vendedor' if 'Vendedor' in df.columns else None
+            if col_target and 'Total' in df.columns:
+                stats = df.groupby(col_target)['Total'].sum().sort_values(ascending=False)
+                return f"Análisis Senior: El líder de gestión es {stats.index[0]} con un impacto de ${stats.iloc[0]:,.2f}."
+            
+        # Análisis de Pareto / Estrella
+        if any(p in p_limpia for p in ["rentable", "pareto", "estrella", "más vendido"]):
+            col_valor = 'Total' if 'Total' in df.columns else ('Precio Venta' if 'Precio Venta' in df.columns else df.columns[-1])
+            pareto = df.groupby('Producto')[col_valor].sum().sort_values(ascending=False)
+            return f"El activo estrella en {rubro} es {pareto.index[0]} con un valor acumulado de ${pareto.iloc[0]:,.2f}."
 
     # ==========================================================
-    # BÚSQUEDA UNIVERSAL (RAPIDFUZZ)
+    # BÚSQUEDA UNIVERSAL (Si nada de lo anterior aplica)
     # ==========================================================
-    prod_buscado = limpiar_pregunta(pregunta_original)
     productos = df['Producto'].astype(str).tolist()
-    match = process.extractOne(prod_buscado, productos, processor=utils.default_process)
+    match = process.extractOne(limpiar_pregunta(pregunta_original), productos, processor=utils.default_process)
     
     if match and match[1] > 60:
         fila = df[df['Producto'] == match[0]].iloc[0]
-        
-        # Validamos si existen columnas de precio antes de calcular
+        # Si es farmacia y pides precio
         if 'Precio Venta' in df.columns:
             p_usd = float(fila['Precio Venta'])
-            p_bs = p_usd * tasa
-            if not modo_admin:
-                return f"El valor de {match[0]} es {p_bs:,.2f} BS ({p_usd:,.2f} USD)."
-            else:
-                costo = float(fila['Costo']) if 'Costo' in df.columns else 0
-                stock = fila['Stock Actual'] if 'Stock Actual' in df.columns else 'N/A'
-                margen = ((p_usd - costo) / p_usd) * 100 if p_usd > 0 else 0
-                return f"Auditoría {match[0]}: Stock {stock}. Margen {margen:.1f}%. Rubro: {rubro}."
-        
-        return f"He encontrado el registro de {match[0]} en el archivo de {rubro}, pero no tiene columna de precio."
+            return f"El {match[0]} tiene un costo de {p_usd * tasa:,.2f} BS ({p_usd:,.2f} USD)."
+        # Si es RRHH o Logística
+        if 'Total' in df.columns:
+            return f"Registro encontrado: {match[0]} con un valor/sueldo de ${fila['Total']:,.2f}."
 
-    return f"No encontré el registro, pero puedo analizar otros datos de tu archivo de {rubro}."
+    return f"Como tu consultora en {rubro}, no hallé el dato exacto, pero puedo analizar tus totales o el mejor desempeño si lo deseas."
 @app.route('/')
 def index(): return render_template('index.html', tasa=inventario["tasa"])
 
