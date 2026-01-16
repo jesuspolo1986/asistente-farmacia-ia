@@ -7,14 +7,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root { --primary: #00d2ff; --admin: #8e2de2; }
-        body { background: #0f172a; color: white; font-family: sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+        body { background: #0f172a; color: white; font-family: sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; overflow: hidden; }
         .main-container { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 30px; padding: 2rem; width: 100%; max-width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         .elena-aura { width: 120px; height: 120px; margin: 1rem auto; position: relative; cursor: pointer; }
         .aura-core { inset: 0; position: absolute; border-radius: 50%; background: linear-gradient(45deg, var(--primary), #3a7bd5); transition: 0.5s; box-shadow: 0 0 30px rgba(0,210,255,0.3); }
-        .admin-mode .aura-core { background: linear-gradient(45deg, var(--admin), #4a00e0); box-shadow: 0 0 30px rgba(142,45,226,0.3); }
+        .admin-mode .aura-core { background: linear-gradient(45deg, var(--admin), #4a00e0); }
+        .listening .aura-core { animation: pulse 1s infinite; box-shadow: 0 0 50px var(--primary); }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         .chat-input { background: rgba(255,255,255,0.1); border: none; border-radius: 15px; color: white; padding: 12px; width: 100%; margin-top: 15px; text-align: center; outline: none; }
         .response-box { min-height: 60px; margin: 15px 0; font-size: 0.9rem; color: #cbd5e1; }
-        .btn-pdf { background: var(--admin); color: white; border: none; border-radius: 10px; padding: 8px; width: 100%; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body class="{{ 'admin-mode' if modo_inicial == 'admin' else '' }}">
@@ -25,21 +26,14 @@
         <span style="letter-spacing:1px;">{{ modo_inicial.upper() }}</span>
     </div>
 
-    <div class="elena-aura" onclick="activarAudio()">
+    <div class="elena-aura" id="aura" onclick="iniciarEscucha()">
         <div class="aura-core"></div>
     </div>
 
     <h5 class="mb-0">ELENA AI</h5>
-    <p style="font-size:0.6rem; opacity:0.6;">{{ 'GESTIÓN FINANCIERA' if modo_inicial == 'admin' else 'ASESOR DE VENTAS' }}</p>
+    <div class="response-box" id="elenaRes">Toca el núcleo para hablarme</div>
 
-    <div class="response-box" id="elenaRes">Toca el núcleo para iniciar</div>
-
-    {% if modo_inicial == 'admin' %}
-    <button class="btn-pdf" onclick="location.href='/descargar-pdf?admin=true'">📄 DESCARGAR REPORTE</button>
-    {% endif %}
-
-    <input type="text" id="userInput" class="chat-input" placeholder="¿Qué buscamos hoy?" onkeypress="if(event.key==='Enter') enviar()">
-    
+    <input type="text" id="userInput" class="chat-input" placeholder="O escribe aquí..." onkeypress="if(event.key==='Enter') enviar()">
     <input type="file" id="fileIn" hidden onchange="subir()">
     <button class="btn btn-link btn-sm text-white-50 mt-3 text-decoration-none" onclick="document.getElementById('fileIn').click()">Sincronizar Excel</button>
 </div>
@@ -47,7 +41,9 @@
 <script>
     const modoAdmin = "{{ modo_inicial }}" === "admin";
     const synth = window.speechSynthesis;
-
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    // Motor de Voz (Elena te habla)
     function hablar(t) {
         if(!t) return;
         synth.cancel();
@@ -56,26 +52,46 @@
         synth.speak(u);
     }
 
-    function activarAudio() {
-        const s = modoAdmin ? "Sistema financiero activo." : "Hola, soy Elena.";
-        document.getElementById('elenaRes').innerText = s;
-        hablar(s);
+    // Motor de Escucha (Tú le hablas a Elena)
+    function iniciarEscucha() {
+        if (!SpeechRecognition) {
+            alert("Tu navegador no soporta reconocimiento de voz. Usa Chrome.");
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-ES';
+        
+        recognition.onstart = () => {
+            document.getElementById('aura').classList.add('listening');
+            document.getElementById('elenaRes').innerText = "Escuchando...";
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById('userInput').value = transcript;
+            enviar(); // Envía automáticamente lo que escuchó
+        };
+
+        recognition.onend = () => {
+            document.getElementById('aura').classList.remove('listening');
+        };
+
+        recognition.start();
     }
 
     async function enviar() {
         const input = document.getElementById('userInput');
-        const resBox = document.getElementById('elenaRes');
         const text = input.value.trim();
         if(!text) return;
 
-        resBox.innerText = "Buscando...";
         const res = await fetch('/preguntar', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ pregunta: text, tasa: document.getElementById('tasa').value, modo_admin: modoAdmin })
         });
         const data = await res.json();
-        resBox.innerText = data.respuesta_asistente;
+        document.getElementById('elenaRes').innerText = data.respuesta_asistente;
         hablar(data.respuesta_asistente);
         input.value = "";
     }
