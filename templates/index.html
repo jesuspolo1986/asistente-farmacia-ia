@@ -3,99 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elena AI</title>
+    <title>Elena AI | Farmacia</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root { --primary: #00d2ff; --admin: #8e2de2; }
-        body { background: #0f172a; color: white; font-family: sans-serif; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; overflow: hidden; }
-        .main-container { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border-radius: 30px; padding: 2rem; width: 100%; max-width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.1); position: relative; }
-        .elena-aura { width: 120px; height: 120px; margin: 1rem auto; position: relative; cursor: pointer; }
-        .aura-core { inset: 0; position: absolute; border-radius: 50%; background: linear-gradient(45deg, var(--primary), #3a7bd5); transition: 0.5s; box-shadow: 0 0 30px rgba(0,210,255,0.3); }
-        .admin-mode .aura-core { background: linear-gradient(45deg, var(--admin), #4a00e0); }
-        .listening .aura-core { animation: pulse 1s infinite; box-shadow: 0 0 50px var(--primary); }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        .chat-input { background: rgba(255,255,255,0.1); border: none; border-radius: 15px; color: white; padding: 12px; width: 100%; margin-top: 15px; text-align: center; outline: none; }
-        .response-box { min-height: 60px; margin: 15px 0; font-size: 0.9rem; color: #cbd5e1; }
+        :root { --primary: #00d2ff; --admin: #a18cd1; }
+        body { background: #0f172a; color: white; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', sans-serif; }
+        .card-elena { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 40px; padding: 2.5rem; width: 420px; text-align: center; backdrop-filter: blur(20px); }
+        .aura { width: 130px; height: 130px; margin: 0 auto 1.5rem; position: relative; cursor: pointer; transition: 0.4s; }
+        .aura-inner { inset: 0; position: absolute; border-radius: 50%; background: linear-gradient(45deg, var(--primary), #3a7bd5); box-shadow: 0 0 30px rgba(0,210,255,0.4); }
+        .admin-mode .aura-inner { background: linear-gradient(45deg, #fbc2eb, var(--admin)); box-shadow: 0 0 30px rgba(161,140,209,0.4); }
+        .listening .aura-inner { animation: pulse 1.2s infinite; }
+        @keyframes pulse { 0% {transform: scale(1);} 50% {transform: scale(1.15); opacity: 0.8;} 100% {transform: scale(1);} }
+        .res-box { min-height: 90px; font-size: 1.1rem; margin: 1rem 0; color: #e2e8f0; }
+        .input-elena { background: rgba(255,255,255,0.07); border: none; border-radius: 15px; color: white; padding: 12px; width: 100%; text-align: center; }
     </style>
 </head>
-<body class="{{ 'admin-mode' if modo_inicial == 'admin' else '' }}">
+<body class="{{ 'admin-mode' if modo == 'admin' else '' }}">
 
-<div class="main-container">
-    <div class="d-flex justify-content-between small mb-3">
-        <span>Tasa: <input type="number" id="tasa" value="{{ tasa }}" style="width:60px; background:none; border:none; color:var(--primary); font-weight:bold;"></span>
-        <span style="letter-spacing:1px;">{{ modo_inicial.upper() }}</span>
+<div class="card-elena">
+    <div class="d-flex justify-content-between mb-4 opacity-50 small">
+        <span>Tasa BS: <b>{{ tasa }}</b></span>
+        <span>MODO: {{ modo.upper() }}</span>
     </div>
 
-    <div class="elena-aura" id="aura" onclick="iniciarEscucha()">
-        <div class="aura-core"></div>
+    <div class="aura" id="auraBtn" onclick="escuchar()">
+        <div class="aura-inner"></div>
     </div>
 
-    <h5 class="mb-0">ELENA AI</h5>
-    <p style="font-size:0.6rem; opacity:0.6;">{{ 'GESTIÓN FINANCIERA' if modo_inicial == 'admin' else 'ASESOR DE VENTAS' }}</p>
+    <h4 class="fw-bold">ELENA AI</h4>
+    <div class="res-box" id="textoElena">Toca el núcleo para consultar</div>
 
-    <div class="response-box" id="elenaRes">Toca el núcleo para hablarme</div>
-
-    <input type="text" id="userInput" class="chat-input" placeholder="O escribe aquí..." onkeypress="if(event.key==='Enter') enviar()">
+    <input type="text" id="userInput" class="input-elena" placeholder="Nombre del producto..." onkeypress="if(event.key==='Enter') enviar()">
     
-    <input type="file" id="fileIn" hidden onchange="subir()">
-    <div class="d-flex justify-content-center gap-2 mt-3">
-        <button class="btn btn-link btn-sm text-white-50 text-decoration-none" onclick="document.getElementById('fileIn').click()">Subir Excel</button>
-        <button class="btn btn-link btn-sm text-white-50 text-decoration-none" onclick="location.href=(modoAdmin ? '/' : '/gerencia')">Cambiar Modo</button>
-    </div>
+    {% if modo == 'admin' %}
+    <input type="file" id="fileIn" hidden onchange="subirExcel()">
+    <button class="btn btn-outline-light btn-sm mt-4 w-100" style="border-radius:12px; opacity:0.6" onclick="document.getElementById('fileIn').click()">
+        ACTUALIZAR INVENTARIO (EXCEL)
+    </button>
+    {% endif %}
 </div>
 
 <script>
-    const modoAdmin = "{{ modo_inicial }}" === "admin";
-    const synth = window.speechSynthesis;
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    function hablar(t) {
-        if(!t) return;
-        synth.cancel();
-        const u = new SpeechSynthesisUtterance(t.replace(/[📊💊🚨\[\]]/g, ''));
+    const esAdmin = "{{ modo }}" === "admin";
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'es-VE';
+
+    function hablar(msj) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(msj.replace(/[📊🚨]/g, ''));
         u.lang = 'es-MX';
-        synth.speak(u);
+        window.speechSynthesis.speak(u);
     }
 
-    function iniciarEscucha() {
-        if (!SpeechRecognition) {
-            alert("Usa Chrome para hablar con Elena.");
-            return;
-        }
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'es-ES';
-        recognition.onstart = () => {
-            document.getElementById('aura').classList.add('listening');
-            document.getElementById('elenaRes').innerText = "Elena escuchando...";
-        };
-        recognition.onresult = (e) => {
-            document.getElementById('userInput').value = e.results[0][0].transcript;
-            enviar();
-        };
-        recognition.onend = () => document.getElementById('aura').classList.remove('listening');
-        recognition.start();
+    function escuchar() {
+        try { recognition.start(); } catch(e) {}
+        document.getElementById('auraBtn').classList.add('listening');
+        document.getElementById('textoElena').innerText = "Escuchando...";
     }
+
+    recognition.onresult = (e) => {
+        document.getElementById('userInput').value = e.results[0][0].transcript;
+        enviar();
+    };
+
+    recognition.onend = () => document.getElementById('auraBtn').classList.remove('listening');
 
     async function enviar() {
-        const input = document.getElementById('userInput');
-        if(!input.value.trim()) return;
+        const query = document.getElementById('userInput').value;
+        if(!query) return;
+        
         const res = await fetch('/preguntar', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ pregunta: input.value, tasa: document.getElementById('tasa').value, modo_admin: modoAdmin })
+            body: JSON.stringify({ pregunta: query, tasa: "{{ tasa }}", modo_admin: esAdmin })
         });
         const data = await res.json();
-        document.getElementById('elenaRes').innerText = data.respuesta_asistente;
-        hablar(data.respuesta_asistente);
-        input.value = "";
+        document.getElementById('textoElena').innerText = data.respuesta;
+        hablar(data.respuesta);
+        document.getElementById('userInput').value = "";
     }
 
-    async function subir() {
+    async function subirExcel() {
         const fd = new FormData();
         fd.append('file', document.getElementById('fileIn').files[0]);
+        document.getElementById('textoElena').innerText = "Sincronizando datos...";
         const res = await fetch('/upload', { method: 'POST', body: fd });
         const data = await res.json();
-        document.getElementById('elenaRes').innerText = data.mensaje;
+        document.getElementById('textoElena').innerText = data.mensaje || "Error al subir";
         hablar(data.mensaje);
     }
 </script>
