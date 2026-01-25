@@ -3,140 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elena AI - Asistente de Farmacia</title>
+    <title>Elena AI - Farmacia</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root { --primary: #00d2ff; --bg: #0f172a; --card: #1e293b; }
-        body { 
-            background: var(--bg); 
-            color: white; 
-            height: 100vh; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-family: 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-        }
+        body { background: var(--bg); color: white; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', sans-serif; margin: 0; }
+        
         .card-elena { 
-            background: var(--card); 
-            border-radius: 40px; 
-            padding: 2.5rem; 
-            width: 400px; 
-            text-align: center; 
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            background: var(--card); border-radius: 40px; padding: 2.5rem; width: 400px; text-align: center; 
+            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 50px rgba(0,0,0,0.5); 
         }
-        /* Contenedor del Avatar 3D */
+
+        /* Contenedor circular para el Video */
         .aura { 
-            width: 180px; 
-            height: 180px; 
-            margin: 0 auto 1.5rem; 
-            border-radius: 50%; 
-            overflow: hidden; 
-            border: 4px solid var(--primary); 
+            width: 180px; height: 180px; margin: 0 auto 1.5rem; border-radius: 50%; 
+            border: 4px solid var(--primary); position: relative; overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.3); cursor: pointer;
             background: #000;
-            box-shadow: 0 0 25px rgba(0, 210, 255, 0.3);
-            cursor: pointer;
-            position: relative;
         }
-        .res-box { 
-            min-height: 80px; 
-            margin-bottom: 1.5rem; 
-            color: #cbd5e1; 
-            font-size: 0.95rem; 
-            display: flex;
-            align-items: center;
-            justify-content: center;
+
+        #elenaVideo {
+            width: 100%; height: 100%; object-fit: cover;
+            filter: grayscale(20%); transition: all 0.5s ease;
         }
-        .input-elena { 
-            background: #334155; 
-            border: 2px solid transparent; 
-            border-radius: 20px; 
-            color: white; 
-            padding: 15px; 
-            width: 100%; 
-            text-align: center; 
-            outline: none; 
-            transition: 0.3s;
+
+        /* Efecto cuando Elena habla */
+        .hablando {
+            border-color: #fff !important;
+            box-shadow: 0 0 30px var(--primary), 0 0 50px var(--primary) !important;
+            transform: scale(1.05);
         }
-        .input-elena:focus { border-color: var(--primary); }
-        .btn-admin { 
-            background: var(--primary); 
-            color: #0f172a; 
-            border: none; 
-            border-radius: 15px; 
-            padding: 10px 20px; 
-            font-weight: bold; 
-            margin-top: 15px;
-            display: none; /* Se activa en modo gerencia */
-            width: 100%;
-            cursor: pointer;
-        }
-        #loading-overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-            color: var(--primary);
-        }
+
+        .res-box { min-height: 80px; margin-bottom: 1.5rem; color: #cbd5e1; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; }
+        .input-elena { background: #334155; border: none; border-radius: 20px; color: white; padding: 15px; width: 100%; text-align: center; outline: none; }
+        .btn-admin { background: var(--primary); color: #0f172a; border: none; border-radius: 15px; padding: 10px; font-weight: bold; margin-top: 15px; display: none; width: 100%; }
     </style>
 </head>
 <body>
 
 <div class="card-elena">
-    <div class="aura" id="avatar-container" onclick="escuchar()">
-        <div id="loading-overlay">Cargando Elena...</div>
+    <div class="aura" id="auraContainer" onclick="escuchar()">
+        <video id="elenaVideo" preload="auto" loop muted playsinline>
+            <source src="/static/img/Una mujer estadounidense profe.mp4" type="video/mp4">
+        </video>
     </div>
     
     <h3 class="fw-bold mb-1">ELENA AI</h3>
-    <div class="res-box" id="textoElena">Haz clic en mi rostro para hablar o escribe tu consulta.</div>
+    <div class="res-box" id="textoElena">Haz clic en mi rostro para hablar.</div>
     
-    <input type="text" id="userInput" class="input-elena" placeholder="¿Qué medicamento buscas?" onkeypress="if(event.key==='Enter') enviar()">
+    <input type="text" id="userInput" class="input-elena" placeholder="¿En qué puedo ayudarte?" onkeypress="if(event.key==='Enter') enviar()">
     
     <input type="file" id="fileInput" style="display: none;" onchange="subirArchivo()">
     <button id="btnAdmin" class="btn-admin" onclick="document.getElementById('fileInput').click()">📦 CARGAR INVENTARIO EXCEL</button>
 </div>
 
-<script type="module">
-    import { TalkingHead } from "https://cdn.jsdelivr.net/gh/wa-sh-i/talkinghead@main/dist/talkinghead.mjs";
-
-    async function init() {
-        const node = document.getElementById('avatar-container');
-        const loader = document.getElementById('loading-overlay');
-        
-        try {
-            const head = new TalkingHead(node, {
-                cameraView: "head",
-                lipsyncModules: ["es"],
-                cameraDistance: 1.4
-            });
-
-            // Cargamos el modelo 3D de Ready Player Me
-            await head.showAvatar({
-                url: 'https://models.readyplayer.me/64b519d36098045610815a51.glb',
-                body: 'F',
-                avatarMood: 'friendly'
-            });
-
-            window.elenaHead = head;
-            loader.style.display = 'none'; // Quitamos el texto de carga
-            console.log("Elena lista!");
-        } catch (e) {
-            console.error("Error inicializando TalkingHead:", e);
-            loader.innerText = "Error de conexión";
-        }
-    }
-    init();
-</script>
-
 <script>
     const synth = window.speechSynthesis;
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const video = document.getElementById('elenaVideo');
+    const aura = document.getElementById('auraContainer');
 
-    // Función para que Elena hable y mueva los labios
+    // Intentar reproducir el video en bucle suave al cargar
+    document.addEventListener('click', () => video.play(), {once: true});
+
     function hablar(msj) {
         if (!synth) return;
         synth.cancel();
@@ -144,82 +72,61 @@
         u.lang = 'es-MX';
         
         u.onstart = () => {
-            if(window.elenaHead) window.elenaHead.speakText(msj);
+            aura.classList.add('hablando');
+            video.playbackRate = 1.2; // Acelera un poco el movimiento al hablar
         };
         u.onend = () => {
-            if(window.elenaHead) window.elenaHead.stopSpeaking();
+            aura.classList.remove('hablando');
+            video.playbackRate = 1.0;
         };
         
         synth.speak(u);
     }
 
-    // Enviar consulta al servidor Flask
     async function enviar() {
         const input = document.getElementById('userInput');
         const query = input.value.trim();
         if(!query) return;
 
-        try {
-            const res = await fetch('/preguntar', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ pregunta: query })
-            });
-            const data = await res.json();
-            
-            document.getElementById('textoElena').innerText = data.respuesta;
-            hablar(data.respuesta);
+        const res = await fetch('/preguntar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ pregunta: query })
+        });
+        const data = await res.json();
+        
+        document.getElementById('textoElena').innerText = data.respuesta;
+        hablar(data.respuesta);
 
-            // Activar botón de carga si detecta palabra clave
-            if(data.status === "MODO_ADMIN") {
-                document.getElementById('btnAdmin').style.display = 'block';
-            }
-            input.value = "";
-        } catch (e) {
-            document.getElementById('textoElena').innerText = "Error de conexión con el servidor.";
+        if(data.status === "MODO_ADMIN") {
+            document.getElementById('btnAdmin').style.display = 'block';
         }
+        input.value = "";
     }
 
-    // Subida de archivos para Gerencia
     async function subirArchivo() {
         const file = document.getElementById('fileInput').files[0];
-        if(!file) return;
-
         const formData = new FormData();
         formData.append('archivo', file);
-
-        document.getElementById('textoElena').innerText = "Analizando archivo de inventario...";
-        
-        try {
-            const res = await fetch('/upload', { method: 'POST', body: formData });
-            const data = await res.json();
-            
-            if(data.success) {
-                document.getElementById('textoElena').innerText = data.mensaje;
-                hablar(data.mensaje);
-                document.getElementById('btnAdmin').style.display = 'none';
-            } else {
-                alert("Error: " + data.mensaje);
-            }
-        } catch (e) {
-            alert("Error al subir el archivo.");
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if(data.success) {
+            document.getElementById('textoElena').innerText = data.mensaje;
+            hablar(data.mensaje);
+            document.getElementById('btnAdmin').style.display = 'none';
         }
     }
 
-    // Reconocimiento de Voz
     function escuchar() {
-        if(!SpeechRecognition) {
-            alert("Tu navegador no soporta reconocimiento de voz.");
-            return;
-        }
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if(!SpeechRecognition) return alert("Navegador no soportado");
         const rec = new SpeechRecognition();
         rec.lang = 'es-VE';
-        rec.onstart = () => { document.getElementById('textoElena').innerText = "Elena te escucha..."; };
+        rec.onstart = () => document.getElementById('textoElena').innerText = "Escuchando...";
         rec.onresult = (e) => {
             document.getElementById('userInput').value = e.results[0][0].transcript;
             enviar();
         };
-        rec.onerror = () => { document.getElementById('textoElena').innerText = "No pude escucharte bien."; };
         rec.start();
     }
 </script>
