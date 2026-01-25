@@ -18,43 +18,51 @@
         .aura { 
             width: 180px; height: 180px; margin: 0 auto 1.5rem; border-radius: 50%; 
             border: 4px solid var(--primary); position: relative; overflow: hidden;
-            box-shadow: 0 0 20px rgba(0, 210, 255, 0.3); cursor: pointer;
-            background: #000;
+            box-shadow: 0 0 25px rgba(0, 210, 255, 0.4); cursor: pointer;
+            background: #000; /* Fondo negro mientras carga */
         }
 
         #elenaVideo {
             width: 100%; height: 100%; object-fit: cover;
-            filter: grayscale(20%); transition: all 0.5s ease;
+            display: block;
         }
 
-        /* Efecto cuando Elena habla */
+        /* Animación de pulso cuando Elena habla */
         .hablando {
+            animation: pulse-border 1s infinite;
             border-color: #fff !important;
-            box-shadow: 0 0 30px var(--primary), 0 0 50px var(--primary) !important;
-            transform: scale(1.05);
         }
 
-        .res-box { min-height: 80px; margin-bottom: 1.5rem; color: #cbd5e1; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; }
-        .input-elena { background: #334155; border: none; border-radius: 20px; color: white; padding: 15px; width: 100%; text-align: center; outline: none; }
-        .btn-admin { background: var(--primary); color: #0f172a; border: none; border-radius: 15px; padding: 10px; font-weight: bold; margin-top: 15px; display: none; width: 100%; }
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 20px var(--primary); }
+            50% { box-shadow: 0 0 50px var(--primary), 0 0 20px #fff; }
+            100% { box-shadow: 0 0 20px var(--primary); }
+        }
+
+        .res-box { min-height: 80px; margin-bottom: 1.5rem; color: #cbd5e1; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; line-height: 1.4; }
+        .input-elena { background: #334155; border: 2px solid transparent; border-radius: 20px; color: white; padding: 15px; width: 100%; text-align: center; outline: none; transition: 0.3s; }
+        .input-elena:focus { border-color: var(--primary); }
+        
+        .btn-admin { background: var(--primary); color: #0f172a; border: none; border-radius: 15px; padding: 10px; font-weight: bold; margin-top: 15px; display: none; width: 100%; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="card-elena">
     <div class="aura" id="auraContainer" onclick="escuchar()">
-        <video id="elenaVideo" preload="auto" loop muted playsinline>
+        <video id="elenaVideo" autoplay loop muted playsinline>
             <source src="/static/img/Una mujer estadounidense profe.mp4" type="video/mp4">
+            Tu navegador no soporta video.
         </video>
     </div>
     
     <h3 class="fw-bold mb-1">ELENA AI</h3>
-    <div class="res-box" id="textoElena">Haz clic en mi rostro para hablar.</div>
+    <div class="res-box" id="textoElena">Haz clic en mi rostro para hablar o escribe abajo.</div>
     
-    <input type="text" id="userInput" class="input-elena" placeholder="¿En qué puedo ayudarte?" onkeypress="if(event.key==='Enter') enviar()">
+    <input type="text" id="userInput" class="input-elena" placeholder="¿Buscas algún precio?" onkeypress="if(event.key==='Enter') enviar()">
     
     <input type="file" id="fileInput" style="display: none;" onchange="subirArchivo()">
-    <button id="btnAdmin" class="btn-admin" onclick="document.getElementById('fileInput').click()">📦 CARGAR INVENTARIO EXCEL</button>
+    <button id="btnAdmin" class="btn-admin" onclick="document.getElementById('fileInput').click()">📦 MODO GERENCIA: CARGAR EXCEL</button>
 </div>
 
 <script>
@@ -62,8 +70,10 @@
     const video = document.getElementById('elenaVideo');
     const aura = document.getElementById('auraContainer');
 
-    // Intentar reproducir el video en bucle suave al cargar
-    document.addEventListener('click', () => video.play(), {once: true});
+    // Forzar inicio del video al primer clic en cualquier parte (regla de navegadores)
+    document.body.addEventListener('click', () => {
+        if (video.paused) video.play();
+    }, { once: true });
 
     function hablar(msj) {
         if (!synth) return;
@@ -73,11 +83,9 @@
         
         u.onstart = () => {
             aura.classList.add('hablando');
-            video.playbackRate = 1.2; // Acelera un poco el movimiento al hablar
         };
         u.onend = () => {
             aura.classList.remove('hablando');
-            video.playbackRate = 1.0;
         };
         
         synth.speak(u);
@@ -98,6 +106,7 @@
         document.getElementById('textoElena').innerText = data.respuesta;
         hablar(data.respuesta);
 
+        // Mostrar botón de admin si el servidor lo indica
         if(data.status === "MODO_ADMIN") {
             document.getElementById('btnAdmin').style.display = 'block';
         }
@@ -108,21 +117,29 @@
         const file = document.getElementById('fileInput').files[0];
         const formData = new FormData();
         formData.append('archivo', file);
-        const res = await fetch('/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-        if(data.success) {
-            document.getElementById('textoElena').innerText = data.mensaje;
-            hablar(data.mensaje);
-            document.getElementById('btnAdmin').style.display = 'none';
+        
+        document.getElementById('textoElena').innerText = "Procesando inventario...";
+        
+        try {
+            const res = await fetch('/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if(data.success) {
+                document.getElementById('textoElena').innerText = data.mensaje;
+                hablar(data.mensaje);
+                document.getElementById('btnAdmin').style.display = 'none';
+            }
+        } catch (e) {
+            alert("Error al cargar el archivo.");
         }
     }
 
     function escuchar() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if(!SpeechRecognition) return alert("Navegador no soportado");
+        if(!SpeechRecognition) return alert("Navegador no compatible");
+        
         const rec = new SpeechRecognition();
         rec.lang = 'es-VE';
-        rec.onstart = () => document.getElementById('textoElena').innerText = "Escuchando...";
+        rec.onstart = () => { document.getElementById('textoElena').innerText = "Elena te escucha..."; };
         rec.onresult = (e) => {
             document.getElementById('userInput').value = e.results[0][0].transcript;
             enviar();
