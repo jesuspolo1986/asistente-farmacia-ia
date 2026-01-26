@@ -5,33 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Elena AI - Farmacia</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --primary: #00d2ff; --bg: #0f172a; --card: #1e293b; }
-        body { background: var(--bg); color: white; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', sans-serif; margin: 0; }
+        :root { --primary: #00d2ff; --bg: #0f172a; --card: rgba(30, 41, 59, 0.7); }
         
+        body { 
+            background: #0f172a; 
+            color: white; 
+            height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-family: 'Segoe UI', sans-serif; 
+            margin: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* CAPSULA DE CRISTAL PROFESIONAL */
+        .admin-status-capsule {
+            display: none; 
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            width: auto;
+            min-width: 320px;
+            border-radius: 50px;
+            padding: 8px 20px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            animation: slideDown 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes slideDown { from { top: -80px; opacity: 0; } to { top: 20px; opacity: 1; } }
+
         .card-elena { 
-            background: var(--card); border-radius: 40px; padding: 2.5rem; width: 400px; text-align: center; 
-            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 50px rgba(0,0,0,0.5); 
+            background: var(--card); border-radius: 40px; padding: 2.5rem; width: 420px; text-align: center; 
+            border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5); position: relative;
         }
 
-        /* Contenedor circular para el Video */
         .aura { 
-            width: 180px; height: 180px; margin: 0 auto 1.5rem; border-radius: 50%; 
+            width: 160px; height: 160px; margin: 0 auto 1.5rem; border-radius: 50%; 
             border: 4px solid var(--primary); position: relative; overflow: hidden;
-            box-shadow: 0 0 25px rgba(0, 210, 255, 0.4); cursor: pointer;
-            background: #000; /* Fondo negro mientras carga */
+            box-shadow: 0 0 25px rgba(0, 210, 255, 0.4); cursor: pointer; background: #000;
         }
 
-        #elenaVideo {
-            width: 100%; height: 100%; object-fit: cover;
-            display: block;
-        }
+        #elenaVideo { width: 100%; height: 100%; object-fit: cover; }
 
-        /* Animación de pulso cuando Elena habla */
-        .hablando {
-            animation: pulse-border 1s infinite;
-            border-color: #fff !important;
-        }
+        .hablando { animation: pulse-border 1s infinite; border-color: #fff !important; }
 
         @keyframes pulse-border {
             0% { box-shadow: 0 0 20px var(--primary); }
@@ -39,111 +64,185 @@
             100% { box-shadow: 0 0 20px var(--primary); }
         }
 
-        .res-box { min-height: 80px; margin-bottom: 1.5rem; color: #cbd5e1; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; line-height: 1.4; }
-        .input-elena { background: #334155; border: 2px solid transparent; border-radius: 20px; color: white; padding: 15px; width: 100%; text-align: center; outline: none; transition: 0.3s; }
-        .input-elena:focus { border-color: var(--primary); }
+        .res-box { min-height: 80px; margin-bottom: 1.5rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.4; }
         
-        .btn-admin { background: var(--primary); color: #0f172a; border: none; border-radius: 15px; padding: 10px; font-weight: bold; margin-top: 15px; display: none; width: 100%; cursor: pointer; }
+        .input-elena { 
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); 
+            border-radius: 20px; color: white; padding: 12px; width: 100%; text-align: center; outline: none; 
+        }
+
+        .btn-admin-action { 
+            background: rgba(0, 210, 255, 0.1); color: var(--primary); border: 1px solid var(--primary);
+            border-radius: 15px; padding: 10px; font-weight: bold; margin-top: 15px; display: none; width: 100%; 
+        }
+        
+        .btn-whatsapp {
+            background: #25d366; color: white; border-radius: 20px; padding: 4px 15px;
+            text-decoration: none; font-weight: 800; font-size: 0.7rem; transition: 0.3s;
+            text-transform: uppercase;
+        }
+        .btn-whatsapp:hover { background: #128c7e; transform: scale(1.05); }
+
+        .top-info { position: absolute; top: 25px; left: 30px; display: flex; align-items: center; gap: 15px; }
+        .logout-btn { position: absolute; top: 25px; right: 30px; color: #cbd5e1; cursor: pointer; font-size: 1.2rem; border: none; background: none; }
     </style>
 </head>
 <body>
 
+<div id="adminCapsule" class="admin-status-capsule">
+    <div class="d-flex align-items-center justify-content-between">
+        <div id="statusText" class="small fw-bold me-3"></div>
+        <a id="wsLink" href="#" target="_blank" class="btn-whatsapp">
+            <i class="fab fa-whatsapp me-1"></i> RENOVAR
+        </a>
+    </div>
+</div>
+
+<audio id="elenaAudio" style="display: none;"></audio>
+
 <div class="card-elena">
+    <div class="top-info">
+        <span class="small text-muted fw-bold">TASA:</span>
+        <span id="displayTasa" class="fw-bold" style="color: var(--primary);">{{ tasa }}</span>
+    </div>
+    
+    <button onclick="handleLogout()" class="logout-btn"><i class="fas fa-sign-out-alt"></i></button>
+
     <div class="aura" id="auraContainer" onclick="escuchar()">
         <video id="elenaVideo" autoplay loop muted playsinline>
             <source src="/static/img/Una mujer estadounidense profe.mp4" type="video/mp4">
-            Tu navegador no soporta video.
         </video>
     </div>
     
-    <h3 class="fw-bold mb-1">ELENA AI</h3>
-    <div class="res-box" id="textoElena">Haz clic en mi rostro para hablar o escribe abajo.</div>
+    <h3 class="fw-bold mb-0">ELENA AI</h3>
+    <p class="small text-muted mb-3">{{ email.split('@')[0] | upper }}</p>
     
-    <input type="text" id="userInput" class="input-elena" placeholder="¿Buscas algún precio?" onkeypress="if(event.key==='Enter') enviar()">
+    <div class="res-box" id="textoElena">Haz clic en mi rostro para consultar un precio.</div>
+    
+    <input type="text" id="userInput" class="input-elena" placeholder="Escribe tu consulta o 'Tasa 55'..." onkeypress="if(event.key==='Enter') enviar()">
     
     <input type="file" id="fileInput" style="display: none;" onchange="subirArchivo()">
-    <button id="btnAdmin" class="btn-admin" onclick="document.getElementById('fileInput').click()">📦 MODO GERENCIA: CARGAR EXCEL</button>
+    <button id="btnAdmin" class="btn-admin-action" onclick="document.getElementById('fileInput').click()">
+        <i class="fas fa-upload me-2"></i> ACTUALIZAR INVENTARIO
+    </button>
 </div>
 
 <script>
-    const synth = window.speechSynthesis;
+    const elenaAudio = document.getElementById('elenaAudio');
     const video = document.getElementById('elenaVideo');
     const aura = document.getElementById('auraContainer');
+    const MI_NUMERO = "584128598727";
+    const diasRestantes = {{ dias_restantes }}; 
 
-    // Forzar inicio del video al primer clic en cualquier parte (regla de navegadores)
-    document.body.addEventListener('click', () => {
-        if (video.paused) video.play();
-    }, { once: true });
-
-    function hablar(msj) {
-        if (!synth) return;
-        synth.cancel();
-        const u = new SpeechSynthesisUtterance(msj);
-        u.lang = 'es-MX';
-        
-        u.onstart = () => {
-            aura.classList.add('hablando');
-        };
-        u.onend = () => {
-            aura.classList.remove('hablando');
-        };
-        
-        synth.speak(u);
-    }
+    // Asegura que el video se reproduzca tras el primer clic del usuario
+    document.body.addEventListener('click', () => { if (video.paused) video.play(); }, { once: true });
 
     async function enviar() {
         const input = document.getElementById('userInput');
         const query = input.value.trim();
         if(!query) return;
 
+        // Soporte para actualizar tasa manualmente
+        let esTasa = query.toLowerCase().startsWith("tasa ");
+        
         const res = await fetch('/preguntar', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ pregunta: query })
+            body: JSON.stringify({ 
+                pregunta: query, 
+                modo_admin: document.getElementById('btnAdmin').style.display === 'block' 
+            })
         });
         const data = await res.json();
         
+        // Si el servidor devuelve una nueva tasa, la actualizamos en el UI
+        if(data.tasa) {
+            document.getElementById('displayTasa').innerText = data.tasa;
+        }
+
         document.getElementById('textoElena').innerText = data.respuesta;
         hablar(data.respuesta);
 
-        // Mostrar botón de admin si el servidor lo indica
-        if(data.status === "MODO_ADMIN") {
-            document.getElementById('btnAdmin').style.display = 'block';
+        if(data.modo_admin === true) {
+            activarModoGerencia();
         }
         input.value = "";
     }
 
+    function activarModoGerencia() {
+        document.getElementById('btnAdmin').style.display = 'block';
+        const capsule = document.getElementById('adminCapsule');
+        const statusText = document.getElementById('statusText');
+        const wsLink = document.getElementById('wsLink');
+
+        if (diasRestantes <= 0) {
+            capsule.style.display = "block";
+            if (diasRestantes === 0) {
+                statusText.innerHTML = "LICENCIA: VENCE HOY";
+                statusText.style.color = "#ffb347";
+            } else {
+                statusText.innerHTML = "🚫 ACCESO POR VENCER: RENOVAR";
+                statusText.style.color = "#ff6b6b";
+            }
+            wsLink.href = `https://wa.me/${MI_NUMERO}?text=Hola,%20necesito%20renovar%20la%20licencia%20de%20Elena%20AI%20para%20{{ email }}`;
+        }
+    }
+
+    function handleLogout() {
+        window.location.href = "/logout";
+    }
+
+    // --- FUNCIÓN HABLAR CON VOZ PREMIUM (Edge-TTS) ---
+    function hablar(msj) {
+        if (!msj) return;
+        
+        // Detener audio actual si existe
+        elenaAudio.pause();
+        
+        // Cargamos la voz desde la ruta del servidor
+        elenaAudio.src = `/leer_voz?texto=${encodeURIComponent(msj)}`;
+        
+        elenaAudio.onplay = () => aura.classList.add('hablando');
+        elenaAudio.onended = () => aura.classList.remove('hablando');
+        
+        elenaAudio.play().catch(e => console.error("Error al reproducir voz:", e));
+    }
+
     async function subirArchivo() {
-        const file = document.getElementById('fileInput').files[0];
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if(!file) return;
+
         const formData = new FormData();
         formData.append('archivo', file);
-        
         document.getElementById('textoElena').innerText = "Procesando inventario...";
         
-        try {
-            const res = await fetch('/upload', { method: 'POST', body: formData });
-            const data = await res.json();
-            if(data.success) {
-                document.getElementById('textoElena').innerText = data.mensaje;
-                hablar(data.mensaje);
-                document.getElementById('btnAdmin').style.display = 'none';
-            }
-        } catch (e) {
-            alert("Error al cargar el archivo.");
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if(data.success) {
+            document.getElementById('textoElena').innerText = `Éxito: ${data.productos} productos cargados.`;
+            hablar("Inventario actualizado correctamente");
         }
     }
 
     function escuchar() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if(!SpeechRecognition) return alert("Navegador no compatible");
-        
+        if(!SpeechRecognition) {
+            alert("Tu navegador no soporta reconocimiento de voz.");
+            return;
+        }
         const rec = new SpeechRecognition();
         rec.lang = 'es-VE';
-        rec.onstart = () => { document.getElementById('textoElena').innerText = "Elena te escucha..."; };
+        rec.onstart = () => { 
+            aura.classList.add('hablando');
+            document.getElementById('textoElena').innerText = "Elena te escucha..."; 
+        };
         rec.onresult = (e) => {
             document.getElementById('userInput').value = e.results[0][0].transcript;
             enviar();
         };
+        rec.onend = () => aura.classList.remove('hablando');
         rec.start();
     }
 </script>
